@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/drawable/ic_skytrack_logo.xml -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <path android:pathData="M50,4 A46,46 0 1,1 49.99,4 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="4"
+                android:startY="4"
+                android:endX="96"
+                android:endY="96">
+                <item android:offset="0" android:color="#C62828"/>
+                <item android:offset="1" android:color="#8E1B1B"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,22 C37,22 29,29 29,37 C29,49 48,48 48,57 C48,62 43,65 37,65 C30,65 26,60 26,60 L22,68 C22,68 28,75 38,75 C51,75 60,67 60,56 C60,43 41,45 41,37 C41,33 45,31 50,31 C56,31 62,34 62,34 L66,26 C66,26 59,22 50,22 Z" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M68,26 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+
+</vector>
