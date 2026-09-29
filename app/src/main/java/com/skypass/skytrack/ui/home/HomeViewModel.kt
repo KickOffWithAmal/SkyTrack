@@ -65,9 +65,9 @@ class HomeViewModel @Inject constructor(
                     val isOnBreak = resolvedAttendance?.breakStartedAt != null
                     val baseBreakSeconds = resolvedAttendance?.totalBreakSeconds ?: 0L
                     var extraBreakSeconds = 0L
-                    if (isOnBreak && resolvedAttendance != null) {
+                    if (isOnBreak) {
                         try {
-                            val breakStartInstant = java.time.Instant.parse(resolvedAttendance.breakStartedAt)
+                            val breakStartInstant = java.time.Instant.parse(resolvedAttendance!!.breakStartedAt)
                             extraBreakSeconds = java.time.Duration.between(breakStartInstant, java.time.Instant.now()).seconds
                         } catch (e: Exception) {
                             // ignore parsing error

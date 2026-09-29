@@ -35,10 +35,10 @@ import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.EventBusy
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import com.skypass.skytrack.ui.components.SyncLoadingOverlay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -142,29 +142,27 @@ fun MonthlyStatisticsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (!state.isLoading) {
-                // Central Circular Dial (Cumulative Work Hours)
-                CentralCircularDial(summary = state.summary)
+            // Central Circular Dial (Cumulative Work Hours)
+            CentralCircularDial(summary = state.summary)
 
-                Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-                // Trio Metric Cards (Present, Leaves, Daily Avg)
-                TrioMetricCardsGrid(summary = state.summary)
+            // Trio Metric Cards (Present, Leaves, Daily Avg)
+            TrioMetricCardsGrid(summary = state.summary)
 
-                Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-                // Action Banner (Timesheet Export)
-                TimesheetExportCard()
+            // Action Banner (Timesheet Export)
+            TimesheetExportCard()
 
-                Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-                // Daily Attendance Log with Filter Tabs
-                DailyAttendanceLogSection(
-                    attendanceList = state.attendance,
-                    selectedFilterIndex = selectedFilterIndex,
-                    onFilterSelected = { selectedFilterIndex = it }
-                )
-            }
+            // Daily Attendance Log with Filter Tabs
+            DailyAttendanceLogSection(
+                attendanceList = state.attendance,
+                selectedFilterIndex = selectedFilterIndex,
+                onFilterSelected = { selectedFilterIndex = it }
+            )
         }
 
         // Floating Bottom Navigation Dock (Active on Stats)
@@ -178,8 +176,11 @@ fun MonthlyStatisticsScreen(
             onAnalyticsClick = { /* Already on Stats */ },
             onProfileClick = onOpenProfile
         )
-        
-        SyncLoadingOverlay(isLoading = state.isLoading)
+
+        // SkyTrack Global Loading Dialog
+        com.skypass.skytrack.ui.components.SkyTrackLoadingOverlay(
+            visible = state.isLoading
+        )
     }
 }
 

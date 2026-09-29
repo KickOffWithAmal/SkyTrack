@@ -26,11 +26,11 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import com.skypass.skytrack.ui.components.SyncLoadingOverlay
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -237,8 +237,11 @@ fun HomeScreen(
             onAnalyticsClick = onOpenMonthlyStatistics,
             onProfileClick = onOpenProfile
         )
-        
-        SyncLoadingOverlay(isLoading = state.isLoading || state.isActionLoading || state.isEndingWork)
+
+        // SkyTrack Global Loading Dialog
+        com.skypass.skytrack.ui.components.SkyTrackLoadingOverlay(
+            visible = state.isLoading || state.isActionLoading || state.isStartingWork || state.isEndingWork
+        )
     }
 }
 
@@ -1053,6 +1056,7 @@ fun AttendanceClockArea(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Main Primary Action Label
                     val label = if (hasEnded) "Completed" else "Check-In"
                     Text(
                         text = label,

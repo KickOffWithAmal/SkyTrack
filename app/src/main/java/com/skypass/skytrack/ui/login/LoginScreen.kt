@@ -16,8 +16,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import com.skypass.skytrack.ui.components.SyncLoadingOverlay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,14 +63,13 @@ fun LoginScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.White)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         // Header
         Column(
             modifier = Modifier
@@ -163,6 +162,9 @@ fun LoginScreen(
             }
         }
 
+        // SkyTrack Global Loading Dialog
+        com.skypass.skytrack.ui.components.SkyTrackLoadingOverlay(visible = loading)
+
         // Footer
         Text(
             text = "SECURED BY SKYTRACK",
@@ -172,9 +174,6 @@ fun LoginScreen(
             letterSpacing = 1.sp,
             modifier = Modifier.padding(bottom = 24.dp)
         )
-        }
-        
-        SyncLoadingOverlay(isLoading = loading)
     }
 }
 

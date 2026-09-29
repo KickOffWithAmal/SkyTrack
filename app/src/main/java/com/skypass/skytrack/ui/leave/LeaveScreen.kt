@@ -56,11 +56,11 @@ import androidx.compose.material.icons.rounded.Timelapse
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import com.skypass.skytrack.ui.components.SyncLoadingOverlay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -350,8 +350,11 @@ fun LeaveScreen(
             onAnalyticsClick = onNavigateStatistics,
             onProfileClick = onNavigateProfile
         )
-        
-        SyncLoadingOverlay(isLoading = state.isSubmitting)
+
+        // SkyTrack Global Loading Dialog
+        com.skypass.skytrack.ui.components.SkyTrackLoadingOverlay(
+            visible = state.isLoading || state.isSubmitting
+        )
     }
 }
 
