@@ -1,0 +1,653 @@
+<USER_REQUEST>
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>SkyTrack Dashboard - Active Work Session</title>
+<!-- Tailwind CSS v3 with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            digital: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          colors: {
+            brand: {
+              red: '#e53935',
+              darkRed: '#c62828',
+              lightRed: '#fee2e2',
+            },
+            surface: {
+              base: '#f8fafc',
+              dim: '#e2e8f0',
+              card: '#ffffff',
+              dock: '#1e2530',
+            }
+          }
+        }
+      }
+    }
+  </script>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@600;700&amp;display=swap" rel="stylesheet">
+<style data-purpose="custom-typography">
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .font-timer {
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.02em;
+    }
+  </style>
+<style data-purpose="pattern-textures">
+    /* Subtle dot grid pattern on metric cards mirroring clean dashboard */
+    .metric-pattern {
+      background-image: radial-gradient(circle, #cbd5e1 1.1px, transparent 1.1px);
+      background-size: 11px 11px;
+    }
+    
+    /* Subtle concentric dashed circle */
+    .radial-dashed {
+      border: 1.5px dashed #fecaca;
+    }
+
+    /* Progress ring stroke animation simulation */
+    .progress-ring-circle {
+      stroke-dasharray: 690;
+      stroke-dashoffset: 490;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.5s ease;
+    }
+  </style>
+</head>
+<body class="bg-surface-base text-slate-900 min-h-screen flex flex-col justify-between items-center selection:bg-red-100">
+<!-- Mobile Viewport Wrapper (390px - 430px optimal bounds) -->
+<main class="w-full max-w-[430px] min-h-screen px-4 pt-6 pb-28 flex flex-col relative mx-auto overflow-hidden select-none" data-purpose="app-container">
+<!-- BEGIN: TopHeaderSection -->
+<header class="w-full mb-5" data-purpose="dashboard-header">
+<!-- Month & Attendance title row -->
+<div class="flex items-center gap-3 mb-4">
+<div class="w-10 h-10 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-brand-red flex-shrink-0" data-purpose="calendar-icon-badge">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div>
+<span class="text-[11px] font-bold tracking-wider uppercase text-slate-400 block leading-tight">Attendance</span>
+<h1 class="text-xl font-bold text-slate-900 leading-tight">February 2026</h1>
+</div>
+</div>
+<!-- Weekly Calendar Strip (Mon 5th selected) -->
+<nav aria-label="Day selection" class="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar py-1" data-purpose="date-slider">
+<!-- 1 Thu -->
+<button class="flex flex-col items-center justify-center py-2.5 px-2.5 rounded-2xl bg-white border border-slate-100 shadow-xs text-slate-400 min-w-[44px]" type="button">
+<span class="text-xs font-bold text-slate-700">1</span>
+<span class="text-[10px] font-medium uppercase mt-0.5 text-slate-400">Thu</span>
+</button>
+<!-- 2 Fri -->
+<button class="flex flex-col items-center justify-center py-2.5 px-2.5 rounded-2xl bg-white border border-slate-100 shadow-xs text-slate-400 min-w-[44px]" type="button">
+<span class="text-xs font-bold text-slate-700">2</span>
+<span class="text-[10px] font-medium uppercase mt-0.5 text-slate-400">Fri</span>
+</button>
+<!-- 3 Sat -->
+<button class="flex flex-col items-center justify-center py-2.5 px-2.5 rounded-2xl bg-white border border-slate-100 shadow-xs text-slate-400 min-w-[44px]" type="button">
+<span class="text-xs font-bold text-slate-700">3</span>
+<span class="text-[10px] font-medium uppercase mt-0.5 text-slate-400">Sat</span>
+</button>
+<!-- 4 Sun -->
+<button class="flex flex-col items-center justify-center py-2.5 px-2.5 rounded-2xl bg-white border border-slate-100 shadow-xs text-slate-400 min-w-[44px]" type="button">
+<span class="text-xs font-bold text-slate-700">4</span>
+<span class="text-[10px] font-medium uppercase mt-0.5 text-slate-400">Sun</span>
+</button>
+<!-- 5 Mon (ACTIVE SELECTED) -->
+<button aria-current="date" class="flex flex-col items-center justify-center py-2.5 px-2.5 rounded-2xl bg-white border-2 border-brand-red shadow-sm min-w-[44px] relative" type="button">
+<span class="text-xs font-bold text-brand-red">5</span>
+<span class="text-[10px] font-bold uppercase mt-0.5 text-brand-red">Mon</span>
+</button>
+<!-- 6 Tue -->
+<button class="flex flex-col items-center justify-center py-2.5 px-2.5 rounded-2xl bg-white border border-slate-100 shadow-xs text-slate-400 min-w-[44px]" type="button">
+<span class="text-xs font-bold text-slate-700">6</span>
+<span class="text-[10px] font-medium uppercase mt-0.5 text-slate-400">Tue</span>
+</button>
+<!-- 7 Wed -->
+<button class="flex flex-col items-center justify-center py-2.5 px-2.5 rounded-2xl bg-white border border-slate-100 shadow-xs text-slate-400 min-w-[44px]" type="button">
+<span class="text-xs font-bold text-slate-700">7</span>
+<span class="text-[10px] font-medium uppercase mt-0.5 text-slate-400">Wed</span>
+</button>
+<!-- 8 Thu -->
+<button class="flex flex-col items-center justify-center py-2.5 px-2.5 rounded-2xl bg-white border border-slate-100 shadow-xs text-slate-400 min-w-[44px]" type="button">
+<span class="text-xs font-bold text-slate-700">8</span>
+<span class="text-[10px] font-medium uppercase mt-0.5 text-slate-400">Thu</span>
+</button>
+</nav>
+</header>
+<!-- END: TopHeaderSection -->
+<!-- BEGIN: UserGreetingSection -->
+<section class="text-center my-2" data-purpose="user-greeting">
+<span class="text-slate-400 text-xs font-medium tracking-wide">Good day,</span>
+<div class="flex items-center justify-center gap-2 mt-0.5">
+<h2 class="text-slate-900 text-lg font-extrabold tracking-tight">Amal Ramachandran</h2>
+<span class="bg-slate-100/90 text-slate-600 border border-slate-200/80 text-[11px] font-semibold px-2 py-0.5 rounded-md">SK001</span>
+</div>
+</section>
+<!-- END: UserGreetingSection -->
+<!-- BEGIN: CentralTimerRingSection -->
+<section class="relative flex items-center justify-center my-3" data-purpose="active-session-timer">
+<!-- Circular Progress Ring Container -->
+<div class="relative w-[250px] h-[250px] flex items-center justify-center">
+<!-- SVG Gauge Track & Active Arc -->
+<svg class="w-full h-full transform -rotate-90" viewBox="0 0 240 240">
+<!-- Background track -->
+<circle cx="120" cy="120" fill="transparent" r="105" stroke="#f1f5f9" stroke-width="12"></circle>
+<!-- Active Progress Stroke (Red brand color) -->
+<circle class="progress-ring-circle" cx="120" cy="120" fill="transparent" r="105" stroke="#ef4444" stroke-width="12"></circle>
+</svg>
+<!-- Inner Concentric Soft Decorative Border & Radial Shadow -->
+<div class="absolute inset-4 rounded-full bg-white shadow-xl shadow-red-100/40 border border-slate-100 flex flex-col items-center justify-center p-4">
+<!-- Subtle inner dashed border ring -->
+<div class="absolute inset-2.5 rounded-full radial-dashed pointer-events-none opacity-40"></div>
+<!-- Timer content -->
+<span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Work Duration</span>
+<!-- Running Active Digital Time Readout -->
+<div class="text-3xl font-timer font-bold text-slate-900 tracking-tight leading-none my-1" id="runningTimer">01:40:53</div>
+<!-- Remaining Time Pill Indicator -->
+<div class="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-100 text-brand-darkRed text-[11px] font-semibold">
+<svg class="w-3.5 h-3.5 text-brand-red flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="">6h 19m left today</span>
+</div>
+</div>
+</div>
+</section>
+<!-- END: CentralTimerRingSection -->
+<!-- BEGIN: TriMetricCardsSection -->
+<section class="grid grid-cols-3 gap-2.5 my-3" data-purpose="attendance-metrics-grid">
+<!-- 1. Check-In Card -->
+<div class="relative bg-white rounded-2xl p-3 border border-slate-100/80 shadow-sm overflow-hidden flex flex-col justify-between h-24">
+<div class="absolute right-0 top-0 bottom-0 w-1/2 opacity-35 metric-pattern pointer-events-none"></div>
+<div class="w-7 h-7 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 mb-1 z-10">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div class="z-10">
+<span class="text-sm font-bold text-slate-800 block leading-tight">07:32</span>
+<span class="text-[11px] font-medium text-slate-400 block mt-0.5">Check-In</span>
+</div>
+</div>
+<!-- 2. Check-Out Card -->
+<div class="relative bg-white rounded-2xl p-3 border border-slate-100/80 shadow-sm overflow-hidden flex flex-col justify-between h-24">
+<div class="absolute right-0 top-0 bottom-0 w-1/2 opacity-35 metric-pattern pointer-events-none"></div>
+<div class="w-7 h-7 rounded-xl bg-red-50 flex items-center justify-center text-brand-red mb-1 z-10">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div class="z-10">
+<span class="text-sm font-bold text-slate-300 block leading-tight">--:--</span>
+<span class="text-[11px] font-medium text-slate-400 block mt-0.5">Check-Out</span>
+</div>
+</div>
+<!-- 3. Total Hours Card -->
+<div class="relative bg-white rounded-2xl p-3 border border-slate-100/80 shadow-sm overflow-hidden flex flex-col justify-between h-24">
+<div class="absolute right-0 top-0 bottom-0 w-1/2 opacity-35 metric-pattern pointer-events-none"></div>
+<div class="w-7 h-7 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 mb-1 z-10">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div class="z-10">
+<span class="text-sm font-bold text-slate-800 block leading-tight">01:40</span>
+<span class="text-[11px] font-medium text-slate-400 block mt-0.5">Total Hours</span>
+</div>
+</div>
+</section>
+<!-- END: TriMetricCardsSection -->
+<!-- BEGIN: CheckOutActionSection -->
+<section class="mt-2 mb-4 flex flex-col items-center relative w-full" data-purpose="checkout-button-container">
+<!-- Informational Floating Tooltip Notice -->
+<div class="relative mb-2.5 z-10" data-purpose="min-hours-tooltip">
+<div class="bg-slate-900 text-white text-[11px] font-medium px-3.5 py-1.5 rounded-lg shadow-md flex items-center gap-1.5">
+<span class="">Check-Out available after 6h 19m</span>
+</div>
+<!-- Downward Caret Pointer -->
+<div class="w-0 h-0 border-x-4 border-x-transparent border-t-[5px] border-t-slate-900 mx-auto -mt-[1px]"></div>
+</div>
+<!-- Disabled / Locked State Check-Out Button -->
+<button class="w-full py-3.5 px-6 rounded-2xl bg-slate-200/70 border border-slate-200 text-slate-400 font-semibold text-sm tracking-wide cursor-not-allowed transition-all flex items-center justify-center gap-2" data-purpose="action-checkout-btn" disabled="" type="button">
+<svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="">Check-Out</span>
+</button>
+</section>
+<!-- END: CheckOutActionSection -->
+<!-- BEGIN: BottomNavigationDock -->
+<nav aria-label="Main Navigation" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-[#1e2530] text-slate-300 rounded-full p-2 flex items-center justify-between shadow-2xl z-50 px-2.5 max-w-[320px] w-full gap-2" data-purpose="floating-bottom-dock">
+<button aria-label="Home" class="bg-[#e53935] text-white rounded-full px-5 py-2.5 flex items-center gap-2 font-medium text-sm transition-all shadow-sm" type="button">
+<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+<path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path>
+</svg>
+<span class="tracking-wide text-sm font-normal text-white">Home</span>
+</button>
+<button aria-label="Statistics" class="p-2.5 rounded-full flex items-center justify-center text-[#8e95a5] hover:text-white transition-colors" type="button">
+<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+<path d="M4 19h3v-7H4v7zm6 0h3v-12h-3v12zm6 0h3v-4h-3v4z"></path>
+</svg>
+</button>
+<button aria-label="Profile" class="p-2.5 rounded-full flex items-center justify-center text-[#8e95a5] hover:text-white transition-colors mr-2" type="button">
+<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+<path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
+</svg>
+</button>
+</nav>
+<!-- END: BottomNavigationDock -->
+</main>
+<!-- BEGIN: Interactive Timer Tick Script -->
+<script data-purpose="timer-simulation">
+    // Simulating the live active work session second counter starting from 01:40:52
+    (function initTimer() {
+      let seconds = 52;
+      let minutes = 40;
+      let hours = 1;
+
+      const timerDisplay = document.getElementById('runningTimer');
+      if (!timerDisplay) return;
+
+      setInterval(() => {
+        seconds++;
+        if (seconds >= 60) {
+          seconds = 0;
+          minutes++;
+          if (minutes >= 60) {
+            minutes = 0;
+            hours++;
+          }
+        }
+        const hStr = String(hours).padStart(2, '0');
+        const mStr = String(minutes).padStart(2, '0');
+        const sStr = String(seconds).padStart(2, '0');
+        timerDisplay.textContent = `${hStr}:${mStr}:${sStr}`;
+      }, 1000);
+    })();
+  </script>
+<!-- END: Interactive Timer Tick Script -->
+<div aria-label="Loading Destinations" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all duration-300" id="sync-loading-overlay" role="dialog">
+<div class="relative w-full max-w-[240px] scale-90 flex flex-col items-center select-none">
+<!-- Ambient Red Glows -->
+
+
+<style>
+      @keyframes floatPlaneDiagonal {
+        0% { transform: translate(-30px, 18px) rotate(-12deg); opacity: 0; }
+        15% { opacity: 1; }
+        85% { opacity: 1; }
+        100% { transform: translate(175px, -30px) rotate(-12deg); opacity: 0; }
+      }
+      @keyframes floatCloudA {
+        0%, 100% { transform: translateX(0px); }
+        50% { transform: translateX(8px); }
+      }
+      @keyframes floatCloudB {
+        0%, 100% { transform: translateX(0px); }
+        50% { transform: translateX(-7px); }
+      }
+      @keyframes sunPulse {
+        0%, 100% { transform: scale(1); opacity: 0.85; }
+        50% { transform: scale(1.1); opacity: 1; }
+      }
+      .animate-flight-path {
+        animation: floatPlaneDiagonal 4.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      .animate-cloud-a {
+        animation: floatCloudA 3.6s ease-in-out infinite;
+      }
+      .animate-cloud-b {
+        animation: floatCloudB 4.2s ease-in-out infinite;
+      }
+      .animate-sun {
+        animation: sunPulse 3s ease-in-out infinite;
+      }
+      .landmark-slide {
+        transition: opacity 0.55s ease-in-out, transform 0.55s cubic-bezier(0.2, 0.8, 0.25, 1);
+      }
+      .indicator-bar {
+        transition: width 0.3s ease, background-color 0.3s ease;
+      }
+    </style>
+<!-- Top Airplane Crossing Arc Track -->
+
+<!-- Tourist Spot Carousel Stage -->
+<div class="relative w-full h-44 overflow-hidden flex items-center justify-center" id="carouselStage">
+<!-- Slide 1: Paris (Eiffel Tower) -->
+<div class="landmark-slide absolute inset-0 flex flex-col items-center justify-between p-3.5" data-slide="0" style="opacity: 0; transform: scale(0.92); pointer-events: none;">
+<!-- City & Country Badge -->
+<div class="w-full flex items-center justify-between z-10">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/90 shadow-xs border border-red-100 text-[11px] font-bold text-slate-800 tracking-wide">
+<span class="w-1.5 h-1.5 rounded-full bg-[#c62828]"></span>
+            Paris, France
+          </span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded-md border border-slate-100">CDG</span>
+</div>
+<!-- Landmark Illustration: Eiffel Tower -->
+<div class="relative w-full h-32 flex items-end justify-center overflow-hidden">
+<!-- Warm Sun Accent -->
+<div class="absolute top-2 right-12 w-10 h-10 rounded-full bg-gradient-to-tr from-amber-200 to-red-200 blur-[2px] opacity-70 animate-sun"></div>
+<!-- Clouds -->
+<div class="absolute left-4 top-5 animate-cloud-a opacity-60">
+<svg class="w-7 h-4 text-white fill-current filter drop-shadow-sm" viewBox="0 0 24 14"><path d="M19.35 6.04C18.67 2.59 15.64 0 12 0 9.11 0 6.6 1.64 5.35 4.04 2.34 4.36 0 6.91 0 10c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"></path></svg>
+</div>
+<div class="absolute right-6 top-8 animate-cloud-b opacity-50">
+<svg class="w-6 h-3.5 text-white fill-current filter drop-shadow-sm" viewBox="0 0 24 14"><path d="M19.35 6.04C18.67 2.59 15.64 0 12 0 9.11 0 6.6 1.64 5.35 4.04 2.34 4.36 0 6.91 0 10c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"></path></svg>
+</div>
+<!-- Eiffel Tower SVG -->
+<svg class="w-36 h-32 z-10" fill="none" viewBox="0 0 120 120">
+<!-- Ground baseline -->
+<path d="M10 116h100" stroke="#e2e8f0" stroke-linecap="round" stroke-width="2"></path>
+<!-- Tower Spire -->
+<line stroke="#a20513" stroke-linecap="round" stroke-width="2.5" x1="60" x2="60" y1="6" y2="22"></line>
+<!-- Dome & top tier -->
+<path d="M57 22h6l2 16h-10l2-16z" fill="#c62828"></path>
+<rect fill="#a20513" height="3" rx="1.5" width="12" x="54" y="38"></rect>
+<!-- Mid tier -->
+<path d="M54 41l-4 28h20l-4-28h-12z" fill="#e53935"></path>
+<!-- Mid tier lattice crosses -->
+<path d="M52 47l16 16m-16 0l16-16" opacity="0.6" stroke="#ffffff" stroke-width="1.2"></path>
+<rect fill="#a20513" height="4" rx="2" width="28" x="46" y="69"></rect>
+<!-- Bottom Arch & Pillars -->
+<path d="M48 73l-16 43h10l8-25c2-6 8-8 10-8s8 2 10 8l8 25h10L72 73H48z" fill="#c62828"></path>
+<!-- Bottom arch inner curve -->
+<path d="M48 116c0-10 5.3-18 12-18s12 8 12 18" fill="none" opacity="0.8" stroke="#ffffff" stroke-width="2"></path>
+<path d="M40 85l12 10m-12 10l10-10m30 0l-10 10m10-20l-12 10" opacity="0.4" stroke="#ffffff" stroke-width="1"></path>
+</svg>
+</div>
+<span class="text-[11px] font-semibold text-slate-500 tracking-wide">Eiffel Tower</span>
+</div>
+<!-- Slide 2: Tokyo (Mount Fuji & Pagoda) -->
+<div class="landmark-slide absolute inset-0 flex flex-col items-center justify-between p-3.5 pointer-events-none" data-slide="1" style="opacity: 0; transform: scale(0.92); pointer-events: none;">
+<!-- City & Country Badge -->
+<div class="w-full flex items-center justify-between z-10">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/90 shadow-xs border border-red-100 text-[11px] font-bold text-slate-800 tracking-wide">
+<span class="w-1.5 h-1.5 rounded-full bg-[#c62828]"></span>
+            Tokyo, Japan
+          </span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded-md border border-slate-100">HND</span>
+</div>
+<!-- Landmark Illustration: Fuji & Pagoda -->
+<div class="relative w-full h-32 flex items-end justify-center overflow-hidden">
+<!-- Rising Red Sun Accent -->
+<div class="absolute top-2 left-10 w-11 h-11 rounded-full bg-gradient-to-br from-[#e53935] to-[#c62828] shadow-md shadow-red-500/20 animate-sun"></div>
+<!-- Mt Fuji Background Silhouette -->
+<svg class="absolute -bottom-1 inset-x-0 w-full h-24" fill="none" viewBox="0 0 200 90">
+<path d="M30 90 L85 24 Q100 20 115 24 L170 90 Z" fill="#e2e8f0" opacity="0.7"></path>
+<!-- Snowcap -->
+<path d="M85 24 Q100 20 115 24 L123 38 L114 43 L106 38 L98 44 L92 38 Z" fill="#ffffff"></path>
+</svg>
+<!-- Japanese Pagoda Foreground -->
+<svg class="w-28 h-30 z-10 transform translate-x-7" fill="none" viewBox="0 0 100 110">
+<!-- Pagoda Spire -->
+<line stroke="#a20513" stroke-linecap="round" stroke-width="2" x1="50" x2="50" y1="4" y2="18"></line>
+<!-- Tier 1 Roof -->
+<path d="M36 28 C42 24 58 24 64 28 L60 22 C55 20 45 20 40 22 Z" fill="#c62828"></path>
+<rect fill="#e2e8f0" height="8" width="12" x="44" y="28"></rect>
+<!-- Tier 2 Roof -->
+<path d="M28 42 C38 36 62 36 72 42 L68 36 C60 33 40 33 32 36 Z" fill="#c62828"></path>
+<rect fill="#cbd5e1" height="10" width="16" x="42" y="42"></rect>
+<!-- Tier 3 Roof -->
+<path d="M20 60 C32 52 68 52 80 60 L76 52 C65 48 35 48 24 52 Z" fill="#a20513"></path>
+<rect fill="#e2e8f0" height="12" width="24" x="38" y="60"></rect>
+<!-- Base Structure -->
+<path d="M14 78 C28 68 72 68 86 78 L82 72 C70 66 30 66 18 72 Z" fill="#c62828"></path>
+<rect fill="#1e2530" height="26" rx="1" width="32" x="34" y="78"></rect>
+<!-- Torii Gate Accents on Left -->
+</svg>
+<!-- Torii Gate on Left -->
+<div class="absolute left-6 bottom-1 z-10">
+<svg class="w-10 h-10" fill="none" viewBox="0 0 40 40">
+<!-- Torii Top Curved Beam -->
+<path d="M3 10 C14 7 26 7 37 10" stroke="#c62828" stroke-linecap="round" stroke-width="3"></path>
+<line stroke="#a20513" stroke-width="2" x1="6" x2="34" y1="15" y2="15"></line>
+<line stroke="#c62828" stroke-width="2.5" x1="12" x2="12" y1="10" y2="38"></line>
+<line stroke="#c62828" stroke-width="2.5" x1="28" x2="28" y1="10" y2="38"></line>
+</svg>
+</div>
+</div>
+<span class="text-[11px] font-semibold text-slate-500 tracking-wide">Mt. Fuji &amp; Pagoda</span>
+</div>
+<!-- Slide 3: New York (Statue of Liberty & Skyline) -->
+<div class="landmark-slide absolute inset-0 flex flex-col items-center justify-between p-3.5 pointer-events-none" data-slide="2" style="opacity: 0; transform: scale(0.92); pointer-events: none;">
+<!-- City & Country Badge -->
+<div class="w-full flex items-center justify-between z-10">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/90 shadow-xs border border-red-100 text-[11px] font-bold text-slate-800 tracking-wide">
+<span class="w-1.5 h-1.5 rounded-full bg-[#c62828]"></span>
+            New York, USA
+          </span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded-md border border-slate-100">JFK</span>
+</div>
+<!-- Landmark Illustration: NYC Skyline & Liberty -->
+<div class="relative w-full h-32 flex items-end justify-center overflow-hidden">
+<!-- Background Skyline Silhouette -->
+<svg class="absolute bottom-0 w-full h-26 text-slate-200 fill-current opacity-85" viewBox="0 0 200 80">
+<rect height="48" width="14" x="8" y="32"></rect>
+<rect height="64" width="18" x="25" y="16"></rect>
+<polygon points="34,6 31,16 37,16"></polygon>
+<rect height="52" width="12" x="46" y="28"></rect>
+<rect height="42" width="15" x="62" y="38"></rect>
+<rect height="58" width="18" x="135" y="22"></rect>
+<polygon points="144,4 141,22 147,22"></polygon>
+<rect height="44" width="16" x="156" y="36"></rect>
+<rect height="36" width="14" x="175" y="44"></rect>
+</svg>
+<!-- Statue of Liberty Center Vector -->
+<svg class="w-28 h-32 z-10" fill="none" viewBox="0 0 100 120">
+<!-- Pedestal -->
+<path d="M36 96 L40 76 L60 76 L64 96 Z" fill="#94a3b8"></path>
+<rect fill="#64748b" height="6" rx="1" width="32" x="34" y="96"></rect>
+<rect fill="#475569" height="12" rx="1" width="40" x="30" y="102"></rect>
+<!-- Torch Arm & Glowing Flame -->
+<line stroke="#c62828" stroke-linecap="round" stroke-width="3" x1="61" x2="72" y1="46" y2="24"></line>
+<!-- Flame glow -->
+<circle cx="73" cy="20" fill="#f59e0b" r="4.5"></circle>
+<circle cx="73" cy="20" fill="#fef3c7" opacity="0.6" r="7"></circle>
+<!-- Body & Robes -->
+<path d="M43 48 L46 76 L56 76 L59 48 Z" fill="#c62828"></path>
+<!-- Tablet arm -->
+<rect fill="#a20513" height="10" rx="1" width="6" x="37" y="48"></rect>
+<!-- Head & Crown Spikes -->
+<circle cx="51" cy="40" fill="#c62828" r="5.5"></circle>
+<!-- Crown Spikes -->
+<path d="M45 35 L47 38 L51 34 L55 38 L57 35" stroke="#a20513" stroke-linecap="round" stroke-width="1.8"></path>
+</svg>
+</div>
+<span class="text-[11px] font-semibold text-slate-500 tracking-wide">Statue of Liberty</span>
+</div>
+<!-- Slide 4: Dubai (Burj Khalifa & Desert Skyline) -->
+<div class="landmark-slide absolute inset-0 flex flex-col items-center justify-between p-3.5 pointer-events-none" data-slide="3" style="opacity: 1; transform: scale(1); pointer-events: auto;">
+<!-- City & Country Badge -->
+<div class="w-full flex items-center justify-between z-10">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/90 shadow-xs border border-red-100 text-[11px] font-bold text-slate-800 tracking-wide">
+<span class="w-1.5 h-1.5 rounded-full bg-[#c62828]"></span>
+            Dubai, UAE
+          </span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded-md border border-slate-100">DXB</span>
+</div>
+<!-- Landmark Illustration: Burj Khalifa & Dunes -->
+<div class="relative w-full h-32 flex items-end justify-center overflow-hidden">
+<!-- Desert Dunes Curve -->
+<svg class="absolute -bottom-1 w-full h-14" fill="none" viewBox="0 0 200 60">
+<path d="M0 45 Q 60 25 120 42 T 200 35 L 200 60 L 0 60 Z" fill="#fee2e2" opacity="0.6"></path>
+<path d="M0 52 Q 80 38 150 50 L 200 46 L 200 60 L 0 60 Z" fill="#fecaca" opacity="0.4"></path>
+</svg>
+<!-- Burj Al Arab on Left -->
+<div class="absolute left-6 bottom-4 z-10">
+<svg class="w-8 h-18" fill="none" viewBox="0 0 36 70">
+<path d="M8 68 L8 14 C 18 20 30 40 30 68 Z" fill="#cbd5e1"></path>
+<line stroke="#94a3b8" stroke-width="2.5" x1="8" x2="8" y1="12" y2="68"></line>
+<line stroke="#a20513" stroke-width="1.5" x1="8" x2="24" y1="28" y2="28"></line>
+</svg>
+</div>
+<!-- Burj Khalifa Center Spire -->
+<svg class="w-24 h-32 z-10" fill="none" viewBox="0 0 80 120">
+<!-- Spire needle -->
+<line stroke="#a20513" stroke-linecap="round" stroke-width="2" x1="40" x2="40" y1="2" y2="20"></line>
+<!-- Stepped needle tiers -->
+<path d="M38 20 L42 20 L41 36 L39 36 Z" fill="#c62828"></path>
+<path d="M36 36 L44 36 L43 54 L37 54 Z" fill="#e53935"></path>
+<!-- Mid stepped tiers -->
+<path d="M33 54 L47 54 L46 76 L34 76 Z" fill="#c62828"></path>
+<!-- Lower tiers with architectural setback setbacks -->
+<path d="M28 76 L52 76 L50 102 L30 102 Z" fill="#a20513"></path>
+<path d="M22 102 L58 102 L56 118 L24 118 Z" fill="#c62828"></path>
+<!-- Vertical reflective streaks -->
+<line opacity="0.7" stroke="#ffffff" stroke-width="1.5" x1="40" x2="40" y1="20" y2="118"></line>
+<line opacity="0.4" stroke="#ffffff" stroke-width="0.8" x1="36" x2="36" y1="54" y2="118"></line>
+<line opacity="0.4" stroke="#ffffff" stroke-width="0.8" x1="44" x2="44" y1="54" y2="118"></line>
+</svg>
+</div>
+<span class="text-[11px] font-semibold text-slate-500 tracking-wide">Burj Khalifa</span>
+</div>
+<!-- Slide 5: Rome (The Colosseum) -->
+<div class="landmark-slide absolute inset-0 flex flex-col items-center justify-between p-3.5 pointer-events-none" data-slide="4" style="opacity: 0; transform: scale(0.92); pointer-events: none;">
+<!-- City & Country Badge -->
+<div class="w-full flex items-center justify-between z-10">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/90 shadow-xs border border-red-100 text-[11px] font-bold text-slate-800 tracking-wide">
+<span class="w-1.5 h-1.5 rounded-full bg-[#c62828]"></span>
+            Rome, Italy
+          </span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded-md border border-slate-100">FCO</span>
+</div>
+<!-- Landmark Illustration: Colosseum -->
+<div class="relative w-full h-32 flex items-end justify-center overflow-hidden">
+<!-- Warm Mediterranean Sun -->
+<div class="absolute top-2 left-14 w-10 h-10 rounded-full bg-gradient-to-tr from-amber-200 to-red-100 opacity-80 blur-[2px] animate-sun"></div>
+<!-- Colosseum Vector Illustration -->
+<svg class="w-44 h-28 z-10" fill="none" viewBox="0 0 150 90">
+<!-- Ground line -->
+<path d="M10 86h130" stroke="#cbd5e1" stroke-linecap="round" stroke-width="2"></path>
+<!-- Colosseum broken outer wall silhouette -->
+<path d="M22 84 L22 36 Q30 30 50 28 Q80 25 110 32 L110 50 Q124 54 130 84 Z" fill="#c62828"></path>
+<!-- Ruined wall steps on top right -->
+<path d="M110 32 L115 36 L115 42 L122 46 L124 52" stroke="#ffffff" stroke-linecap="round" stroke-width="1.5"></path>
+<!-- Top Arches tier -->
+<g fill="#ffffff" opacity="0.85">
+<rect height="9" rx="3" width="6" x="28" y="36"></rect>
+<rect height="9" rx="3" width="6" x="40" y="35"></rect>
+<rect height="9" rx="3" width="6" x="52" y="34"></rect>
+<rect height="9" rx="3" width="6" x="64" y="34"></rect>
+<rect height="9" rx="3" width="6" x="76" y="34"></rect>
+<rect height="9" rx="3" width="6" x="88" y="35"></rect>
+<rect height="9" rx="3" width="6" x="100" y="37"></rect>
+</g>
+<!-- Middle Arches tier -->
+<g fill="#ffffff" opacity="0.85">
+<rect height="12" rx="3.5" width="7" x="26" y="50"></rect>
+<rect height="12" rx="3.5" width="7" x="38" y="49"></rect>
+<rect height="12" rx="3.5" width="7" x="50" y="48"></rect>
+<rect height="12" rx="3.5" width="7" x="62" y="48"></rect>
+<rect height="12" rx="3.5" width="7" x="74" y="48"></rect>
+<rect height="12" rx="3.5" width="7" x="86" y="49"></rect>
+<rect height="12" rx="3.5" width="7" x="98" y="51"></rect>
+<rect height="12" rx="3.5" width="7" x="110" y="54"></rect>
+</g>
+<!-- Bottom Arches tier -->
+<g fill="#ffffff" opacity="0.9">
+<rect height="15" rx="4" width="8" x="25" y="68"></rect>
+<rect height="15" rx="4" width="8" x="38" y="67"></rect>
+<rect height="15" rx="4" width="8" x="51" y="66"></rect>
+<rect height="15" rx="4" width="8" x="64" y="66"></rect>
+<rect height="15" rx="4" width="8" x="77" y="66"></rect>
+<rect height="15" rx="4" width="8" x="90" y="67"></rect>
+<rect height="15" rx="4" width="8" x="103" y="69"></rect>
+<rect height="13" rx="3.5" width="7" x="116" y="72"></rect>
+</g>
+</svg>
+</div>
+<span class="text-[11px] font-semibold text-slate-500 tracking-wide">The Colosseum</span>
+</div>
+</div>
+<!-- Carousel Progress & Slide Dots -->
+<div class="w-full flex items-center justify-center mt-2 px-1" data-purpose="carousel-controls">
+<!-- Animated Slide Dots -->
+<div class="flex items-center gap-1.5" id="slideDots">
+<button aria-label="Slide 1" class="h-1.5 w-1.5 rounded-full bg-slate-200 indicator-bar" data-dot="0" type="button"></button>
+<button aria-label="Slide 2" class="h-1.5 w-1.5 rounded-full bg-slate-200 indicator-bar" data-dot="1" type="button"></button>
+<button aria-label="Slide 3" class="h-1.5 w-1.5 rounded-full bg-slate-200 indicator-bar" data-dot="2" type="button"></button>
+<button aria-label="Slide 4" class="h-1.5 w-6 rounded-full bg-[#c62828] indicator-bar" data-dot="3" type="button"></button>
+<button aria-label="Slide 5" class="h-1.5 w-1.5 rounded-full bg-slate-200 indicator-bar" data-dot="4" type="button"></button>
+</div>
+<!-- Subtle Brand Accent Counter -->
+
+</div>
+</div>
+</div>
+<!-- Tourist Spots Carousel Auto-Slide Controller -->
+<script data-purpose="tourist-carousel-controller">
+  (function initTouristCarousel() {
+    const slides = document.querySelectorAll('.landmark-slide');
+    const dots = document.querySelectorAll('#slideDots [data-dot]');
+    const counterText = document.getElementById('slideCounterText');
+    if (!slides.length) return;
+
+    let currentIndex = 0;
+    const totalSlides = slides.length;
+
+    function showSlide(index) {
+      slides.forEach((slide, idx) => {
+        if (idx === index) {
+          slide.style.opacity = '1';
+          slide.style.transform = 'scale(1)';
+          slide.style.pointerEvents = 'auto';
+        } else {
+          slide.style.opacity = '0';
+          slide.style.transform = 'scale(0.92)';
+          slide.style.pointerEvents = 'none';
+        }
+      });
+
+      dots.forEach((dot, idx) => {
+        if (idx === index) {
+          dot.className = 'h-1.5 w-6 rounded-full bg-[#c62828] indicator-bar';
+        } else {
+          dot.className = 'h-1.5 w-1.5 rounded-full bg-slate-200 indicator-bar';
+        }
+      });
+
+      if (counterText) {
+        counterText.textContent = `0${index + 1}/0${totalSlides}`;
+      }
+    }
+
+    // Auto-advance every 2.8 seconds
+    setInterval(() => {
+      currentIndex = (currentIndex + 1) % totalSlides;
+      showSlide(currentIndex);
+    }, 2800);
+  })();
+</script>
+
+
+</body></html>
+
+This is the common loader for the app, use it when there's network call lag, UI rendering lag or anywhere a loader is needed.
+Also remove the current loaders.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-29T12:59:02+05:30.
+
+The user's current state is as follows:
+Active Document: /Users/amal/Downloads/SkyTrack_01/app/src/main/java/com/skypass/skytrack/MainActivity.kt (LANGUAGE_KOTLIN)
+Cursor is on line: 33
+Other open documents:
+- /Users/amal/Downloads/SkyTrack_01/app/src/main/java/com/skypass/skytrack/MainActivity.kt (LANGUAGE_KOTLIN)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from Gemini 3.8 Flash (Medium) to Gemini 3.1 Pro (Low). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>
