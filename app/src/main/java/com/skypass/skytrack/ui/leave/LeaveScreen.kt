@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.skypass.skytrack.data.local.Session
 import com.skypass.skytrack.data.remote.LeaveDto
+import com.skypass.skytrack.data.remote.PublicHoliday
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -120,8 +121,21 @@ private val Emerald50 = Color(0xFFECFDF5)
 private val Emerald500 = Color(0xFF10B981)
 private val Emerald600 = Color(0xFF059669)
 private val Amber50 = Color(0xFFFFFBEB)
+private val Amber200 = Color(0xFFFDE68A)
+private val Amber500 = Color(0xFFF59E0B)
 private val Amber600 = Color(0xFFD97706)
+private val Amber800 = Color(0xFF92400E)
+private val Amber900 = Color(0xFF78350F)
 private val Teal600 = Color(0xFF0D9488)
+private fun getHolidaysForMonth(
+    yearMonth: YearMonth,
+    remoteHolidays: List<PublicHoliday> = emptyList()
+): List<PublicHoliday> {
+    return remoteHolidays.filter {
+        it.date.year == yearMonth.year && it.date.monthValue == yearMonth.monthValue
+    }
+}
+
 
 @Composable
 fun LeaveScreen(
@@ -135,7 +149,23 @@ fun LeaveScreen(
     val state by viewModel.state.collectAsState()
 
     // Form State
-    var leaveType by remember { mutableStateOf("Casual Leave") }
+    val casualBalance = state.balance?.casual?.balance ?: 0f
+    val sickBalance = state.balance?.sick?.balance ?: 0f
+    val isCasualAvailable = state.balance == null || casualBalance > 0f
+    val isSickAvailable = state.balance == null || sickBalance > 0f
+
+    val initialLeaveType = remember(state.balance) {
+        if (state.balance != null) {
+            when {
+                casualBalance > 0f -> "Casual Leave"
+                sickBalance > 0f -> "Sick Leave"
+                else -> "Loss of Pay"
+            }
+        } else {
+            "Casual Leave"
+        }
+    }
+    var leaveType by remember { mutableStateOf(initialLeaveType) }
     val today = remember { LocalDate.now() }
     var currentMonth by remember { mutableStateOf(YearMonth.from(today)) }
     var selectedStartDate by remember { mutableStateOf(today) }
@@ -143,18 +173,126 @@ fun LeaveScreen(
     var isHalfDay by remember { mutableStateOf(false) }
     var selectedSession by remember { mutableStateOf("First Half") }
     var reason by remember { mutableStateOf("") }
+    var holidayConflictMessage by remember { mutableStateOf<String?>(null) }
+    var showPastDateDialog by remember { mutableStateOf(false) }
+    var resetSliderTrigger by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(session.token) {
         viewModel.loadHistory(session)
     }
 
+    LaunchedEffect(state.balance) {
+        val balance = state.balance
+        if (balance != null) {
+            val casualLeft = balance.casual?.balance ?: 0f
+            val sickLeft = balance.sick?.balance ?: 0f
+            if (casualLeft <= 0f && sickLeft <= 0f) {
+                leaveType = "Loss of Pay"
+            } else if (leaveType.contains("Casual", ignoreCase = true) && casualLeft <= 0f) {
+                leaveType = if (sickLeft > 0f) "Sick Leave" else "Loss of Pay"
+            } else if (leaveType.contains("Sick", ignoreCase = true) && sickLeft <= 0f) {
+                leaveType = if (casualLeft > 0f) "Casual Leave" else "Loss of Pay"
+            }
+        }
+    }
+
+    // Reset screen to initial state when leave submission succeeds
+    LaunchedEffect(state.successMessage) {
+        if (state.successMessage != null) {
+            val casualLeft = state.balance?.casual?.balance ?: 0f
+            val sickLeft = state.balance?.sick?.balance ?: 0f
+            leaveType = when {
+                casualLeft > 0f -> "Casual Leave"
+                sickLeft > 0f -> "Sick Leave"
+                else -> "Loss of Pay"
+            }
+            selectedStartDate = today
+            selectedEndDate = today.plusDays(1)
+            isHalfDay = false
+            selectedSession = "First Half"
+            reason = ""
+            holidayConflictMessage = null
+            showPastDateDialog = false
+            resetSliderTrigger++
+        }
+    }
+
+    if (holidayConflictMessage != null) {
+        AlertDialog(
+            onDismissRequest = { holidayConflictMessage = null },
+            title = { Text("Public Holiday Selected", fontWeight = FontWeight.Bold) },
+            text = { Text(holidayConflictMessage.orEmpty()) },
+            confirmButton = {
+                Button(onClick = { holidayConflictMessage = null }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    val performSubmit = {
+        val rangeStart = selectedStartDate
+        val rangeEnd = if (isHalfDay) selectedStartDate else selectedEndDate
+
+        val finalFrom = rangeStart.toString()
+        val finalTo = rangeEnd.toString()
+        val finalReason = if (isHalfDay) {
+            if (reason.isBlank()) "Half Day ($selectedSession)" else "$reason ($selectedSession)"
+        } else {
+            if (reason.isBlank()) "Leave Application" else reason
+        }
+
+        viewModel.submit(
+            session = session,
+            from = finalFrom,
+            to = finalTo,
+            type = leaveType,
+            reason = finalReason
+        )
+    }
+
+    if (showPastDateDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showPastDateDialog = false
+                resetSliderTrigger++
+            },
+            title = { Text("Past Date Selected", fontWeight = FontWeight.Bold) },
+            text = { Text("You are applying for leave on a past date. Do you want to proceed?") },
+            dismissButton = {
+                Button(onClick = {
+                    showPastDateDialog = false
+                    resetSliderTrigger++
+                }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showPastDateDialog = false
+                    performSubmit()
+                }) {
+                    Text("Submit")
+                }
+            }
+        )
+    }
+
     if (state.error != null) {
         AlertDialog(
-            onDismissRequest = viewModel::clearMessages,
+            onDismissRequest = {
+                viewModel.clearMessages()
+                resetSliderTrigger++
+                viewModel.loadHistory(session)
+            },
             title = { Text("SkyTrack", fontWeight = FontWeight.Bold) },
             text = { Text(state.error.orEmpty()) },
             confirmButton = {
-                Button(onClick = viewModel::clearMessages) {
+                Button(onClick = {
+                    viewModel.clearMessages()
+                    resetSliderTrigger++
+                    viewModel.loadHistory(session)
+                }) {
                     Text("OK")
                 }
             }
@@ -188,7 +326,7 @@ fun LeaveScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Leave Balances Overview (3 Horizontal Cards)
-            LeaveBalancesSection(currentMonth = currentMonth)
+            LeaveBalancesSection(currentMonth = currentMonth, balance = state.balance)
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -249,17 +387,23 @@ fun LeaveScreen(
                     // Leave Type Selector Group
                     LeaveTypeSelector(
                         selectedType = leaveType,
+                        isCasualEnabled = isCasualAvailable,
+                        isSickEnabled = isSickAvailable,
                         onTypeSelected = { leaveType = it }
                     )
 
-                    // Custom Calendar Container
+                    // Custom Calendar Container (Includes Holidays, Duration switch, and Selection summary)
                     LeaveCalendarSection(
                         currentMonth = currentMonth,
+                        remoteHolidays = state.holidays,
                         onPreviousMonth = { currentMonth = currentMonth.minusMonths(1) },
                         onNextMonth = { currentMonth = currentMonth.plusMonths(1) },
                         selectedStartDate = selectedStartDate,
                         selectedEndDate = if (isHalfDay) selectedStartDate else selectedEndDate,
                         isHalfDay = isHalfDay,
+                        onToggleHalfDay = { isHalfDay = !isHalfDay },
+                        selectedSession = selectedSession,
+                        onSessionSelected = { selectedSession = it },
                         onDateClicked = { clickedDate ->
                             if (isHalfDay) {
                                 selectedStartDate = clickedDate
@@ -278,16 +422,6 @@ fun LeaveScreen(
                                 }
                             }
                         }
-                    )
-
-                    // Leave Duration Section & Half Day Switch
-                    LeaveDurationToggle(
-                        isHalfDay = isHalfDay,
-                        onToggle = { isHalfDay = !isHalfDay },
-                        selectedSession = selectedSession,
-                        onSessionSelected = { selectedSession = it },
-                        startDate = selectedStartDate,
-                        endDate = if (isHalfDay) selectedStartDate else selectedEndDate
                     )
 
                     // Reason for Leave Input with Quick Tags
@@ -309,30 +443,38 @@ fun LeaveScreen(
             // Slide-To-Submit Action Slider
             SwipeToSubmitSlider(
                 isLoading = state.isSubmitting,
+                resetTrigger = resetSliderTrigger,
                 onSubmit = {
-                    val finalFrom = selectedStartDate.toString()
-                    val finalTo = (if (isHalfDay) selectedStartDate else selectedEndDate).toString()
-                    val finalReason = if (isHalfDay) {
-                        if (reason.isBlank()) "Half Day ($selectedSession)" else "$reason ($selectedSession)"
-                    } else {
-                        if (reason.isBlank()) "Leave Application" else reason
+                    val rangeStart = selectedStartDate
+                    val rangeEnd = if (isHalfDay) selectedStartDate else selectedEndDate
+
+                    // Check if any public holiday falls in the requested range
+                    val conflictingHolidays = state.holidays.filter { holiday ->
+                        holiday.date in rangeStart..rangeEnd
                     }
 
-                    viewModel.submit(
-                        session = session,
-                        from = finalFrom,
-                        to = finalTo,
-                        type = leaveType,
-                        reason = finalReason
-                    )
+                    if (conflictingHolidays.isNotEmpty()) {
+                        val holidayNames = conflictingHolidays.joinToString { "${it.name} (${it.date})" }
+                        holidayConflictMessage = "Cannot apply leave on a public holiday: $holidayNames. Please adjust your dates."
+                        resetSliderTrigger++
+                        return@SwipeToSubmitSlider
+                    }
+
+                    // Check if applying for a past date
+                    if (rangeStart < today) {
+                        showPastDateDialog = true
+                        return@SwipeToSubmitSlider
+                    }
+
+                    performSubmit()
                 }
             )
 
             // Success Card Feedback
-            AnimatedVisibility(visible = state.successMessage != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                SubmissionSuccessCard(message = state.successMessage.orEmpty())
-            }
+//            AnimatedVisibility(visible = state.successMessage != null) {
+//                Spacer(modifier = Modifier.height(12.dp))
+//                SubmissionSuccessCard(message = state.successMessage.orEmpty())
+//            }
 
             // Recent Leaves History
             if (state.leaves.isNotEmpty()) {
@@ -490,10 +632,23 @@ private fun EmployeeContextSubHeader(
 // LEAVE BALANCES OVERVIEW (3 CARDS)
 // -------------------------------------------------------------
 @Composable
-private fun LeaveBalancesSection(currentMonth: YearMonth) {
+private fun LeaveBalancesSection(currentMonth: YearMonth, balance: com.skypass.skytrack.data.remote.LeaveBalanceDataDto?) {
     val monthName = remember(currentMonth) {
         currentMonth.format(DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH))
     }
+
+    // Safely format float without trailing .0 if integer
+    val formatValue = { value: Float? ->
+        if (value == null) "0"
+        else if (value % 1.0f == 0.0f) value.toInt().toString()
+        else String.format("%.1f", value)
+    }
+
+    val casualBalance = formatValue(balance?.casual?.balance)
+    val casualUsed = formatValue(balance?.casual?.used)
+    
+    val sickBalance = formatValue(balance?.sick?.balance)
+    val sickUsed = formatValue(balance?.sick?.used)
 
     Row(
         modifier = Modifier
@@ -507,11 +662,11 @@ private fun LeaveBalancesSection(currentMonth: YearMonth) {
             title = "CASUAL",
             icon = Icons.Rounded.BeachAccess,
             iconTint = BrandRed,
-            count = "04",
+            count = casualBalance.padStart(2, '0'),
             countColor = BrandRed,
             statusLabel = "Available",
-            footerLeft = "Pending",
-            footerRight = "1 Req",
+            footerLeft = "Used",
+            footerRight = casualUsed,
             footerBadgeBg = Amber50,
             footerBadgeText = Amber600,
             minWidth = 145
@@ -522,11 +677,11 @@ private fun LeaveBalancesSection(currentMonth: YearMonth) {
             title = "SICK",
             icon = Icons.Rounded.Medication,
             iconTint = Teal600,
-            count = "07",
+            count = sickBalance.padStart(2, '0'),
             countColor = Slate900,
             statusLabel = "Available",
-            footerLeft = "Pending",
-            footerRight = "0 Req",
+            footerLeft = "Used",
+            footerRight = sickUsed,
             footerBadgeBg = Emerald50,
             footerBadgeText = Emerald600,
             minWidth = 145
@@ -671,6 +826,8 @@ private fun BalanceCard(
 @Composable
 private fun LeaveTypeSelector(
     selectedType: String,
+    isCasualEnabled: Boolean = true,
+    isSickEnabled: Boolean = true,
     onTypeSelected: (String) -> Unit
 ) {
     Row(
@@ -681,6 +838,7 @@ private fun LeaveTypeSelector(
             title = "Casual (CL)",
             icon = Icons.Rounded.BeachAccess,
             isSelected = selectedType.contains("Casual", ignoreCase = true),
+            enabled = isCasualEnabled,
             onClick = { onTypeSelected("Casual Leave") },
             modifier = Modifier.weight(1f)
         )
@@ -688,6 +846,7 @@ private fun LeaveTypeSelector(
             title = "Sick (SL)",
             icon = Icons.Rounded.MedicalServices,
             isSelected = selectedType.contains("Sick", ignoreCase = true),
+            enabled = isSickEnabled,
             onClick = { onTypeSelected("Sick Leave") },
             modifier = Modifier.weight(1f)
         )
@@ -695,6 +854,7 @@ private fun LeaveTypeSelector(
             title = "Loss of Pay",
             icon = Icons.Rounded.MoneyOff,
             isSelected = selectedType.contains("Loss", ignoreCase = true) || selectedType.contains("LOP", ignoreCase = true),
+            enabled = true,
             onClick = { onTypeSelected("Loss of Pay") },
             modifier = Modifier.weight(1f)
         )
@@ -706,32 +866,50 @@ private fun LeaveTypeOptionButton(
     title: String,
     icon: ImageVector,
     isSelected: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val targetBgColor = when {
+        !enabled -> Slate100
+        isSelected -> BrandRed
+        else -> Slate50
+    }
+    val targetContentColor = when {
+        !enabled -> Slate400
+        isSelected -> Color.White
+        else -> Slate600
+    }
+    val targetBorderColor = when {
+        !enabled -> Slate200
+        isSelected -> BrandRed
+        else -> Slate100
+    }
+
     val bgColor by animateColorAsState(
-        targetValue = if (isSelected) BrandRed else Slate50,
+        targetValue = targetBgColor,
         animationSpec = tween(150),
         label = "btnBg"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected) Color.White else Slate600,
+        targetValue = targetContentColor,
         animationSpec = tween(150),
         label = "btnContent"
     )
     val borderColor by animateColorAsState(
-        targetValue = if (isSelected) BrandRed else Slate100,
+        targetValue = targetBorderColor,
         animationSpec = tween(150),
         label = "btnBorder"
     )
 
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.height(64.dp),
         shape = RoundedCornerShape(16.dp),
         color = bgColor,
         border = BorderStroke(1.dp, borderColor),
-        shadowElevation = if (isSelected) 2.dp else 0.dp
+        shadowElevation = if (isSelected && enabled) 2.dp else 0.dp
     ) {
         Column(
             modifier = Modifier
@@ -761,31 +939,42 @@ private fun LeaveTypeOptionButton(
 }
 
 // -------------------------------------------------------------
-// CUSTOM CALENDAR MATRIX
+// CUSTOM CALENDAR MATRIX WITH HOLIDAYS & INTEGRATED DURATION
 // -------------------------------------------------------------
 @Composable
 private fun LeaveCalendarSection(
     currentMonth: YearMonth,
+    remoteHolidays: List<PublicHoliday> = emptyList(),
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     selectedStartDate: LocalDate,
     selectedEndDate: LocalDate,
     isHalfDay: Boolean,
+    onToggleHalfDay: () -> Unit,
+    selectedSession: String,
+    onSessionSelected: (String) -> Unit,
     onDateClicked: (LocalDate) -> Unit
 ) {
     val monthTitle = remember(currentMonth) {
         currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH))
     }
+    val holidays = remember(currentMonth, remoteHolidays) {
+        getHolidaysForMonth(currentMonth, remoteHolidays)
+    }
+    val holidayDates = remember(holidays) { holidays.map { it.date }.toSet() }
+    var holidayIndex by remember(currentMonth, holidays) { mutableIntStateOf(0) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Slate50)
-            .border(1.dp, Slate100, RoundedCornerShape(16.dp))
-            .padding(14.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = Slate50,
+        border = BorderStroke(1.dp, Slate100)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
             // Month Header with Prev/Next buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -901,6 +1090,7 @@ private fun LeaveCalendarSection(
 
                             if (dayNumber in 1..daysInMonth) {
                                 val thisDate = currentMonth.atDay(dayNumber)
+                                val isHoliday = holidayDates.contains(thisDate)
                                 val isStart = thisDate == selectedStartDate
                                 val isEnd = thisDate == selectedEndDate
                                 val isInRange = !isHalfDay && thisDate > selectedStartDate && thisDate < selectedEndDate
@@ -910,7 +1100,7 @@ private fun LeaveCalendarSection(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(32.dp)
+                                        .height(34.dp)
                                         .padding(horizontal = if (isSelected || isInRange) 0.5.dp else 2.dp)
                                         .clip(
                                             when {
@@ -931,17 +1121,33 @@ private fun LeaveCalendarSection(
                                         .clickable { onDateClicked(thisDate) },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = dayNumber.toString(),
-                                        fontSize = 12.sp,
-                                        fontWeight = if (isSelected || isInRange) FontWeight.Bold else FontWeight.SemiBold,
-                                        color = when {
-                                            isSelected -> Color.White
-                                            isInRange -> BrandRed
-                                            isSunday -> BrandRed
-                                            else -> Slate700
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = dayNumber.toString(),
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected || isInRange) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = when {
+                                                isSelected -> Color.White
+                                                isInRange -> BrandRed
+                                                isHoliday -> BrandRed
+                                                isSunday -> BrandRed
+                                                else -> Slate700
+                                            }
+                                        )
+                                        if (isHoliday) {
+                                            Spacer(modifier = Modifier.height(1.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(4.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isSelected) Color.White else BrandRed)
+                                            )
                                         }
-                                    )
+                                    }
                                 }
                             } else {
                                 // Muted Overflow Days
@@ -953,7 +1159,7 @@ private fun LeaveCalendarSection(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(32.dp),
+                                        .height(34.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -968,194 +1174,333 @@ private fun LeaveCalendarSection(
                     }
                 }
             }
-        }
-    }
-}
 
-// -------------------------------------------------------------
-// LEAVE DURATION & HALF DAY SWITCH
-// -------------------------------------------------------------
-@Composable
-private fun LeaveDurationToggle(
-    isHalfDay: Boolean,
-    onToggle: () -> Unit,
-    selectedSession: String,
-    onSessionSelected: (String) -> Unit,
-    startDate: LocalDate,
-    endDate: LocalDate
-) {
-    val durationText = remember(startDate, endDate, isHalfDay) {
-        if (isHalfDay) {
-            "0.5 Day (Half Day)"
-        } else {
-            val days = ChronoUnit.DAYS.between(startDate, endDate) + 1
-            if (days <= 1) "1 Day" else "$days Days"
-        }
-    }
+            // Public Holiday Banner & Legend
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Slate200.copy(alpha = 0.6f))
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
-    val selectedDatesFormatted = remember(startDate, endDate, isHalfDay) {
-        val formatter = DateTimeFormatter.ofPattern("MMM dd", Locale.ENGLISH)
-        if (isHalfDay || startDate == endDate) {
-            startDate.format(formatter)
-        } else {
-            "${startDate.format(formatter)} – ${endDate.format(formatter)}"
-        }
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // Toggle Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Timelapse,
-                    contentDescription = "Duration",
-                    tint = Slate400,
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = "LEAVE DURATION",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Slate500,
-                    letterSpacing = 0.8.sp
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Half Day",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Slate600
-                )
-
-                // Custom Pill Switch
-                Box(
-                    modifier = Modifier
-                        .size(width = 40.dp, height = 20.dp)
-                        .clip(CircleShape)
-                        .background(if (isHalfDay) BrandRed else Slate200)
-                        .clickable(onClick = onToggle)
-                        .padding(2.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .offset(x = if (isHalfDay) 20.dp else 0.dp)
-                            .shadow(1.dp, CircleShape)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                    )
-                }
-            }
-        }
-
-        // Half Day Session Pills
-        AnimatedVisibility(visible = isHalfDay) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                SessionOptionButton(
-                    title = "First Half (Morning)",
-                    icon = Icons.Rounded.WbSunny,
-                    isSelected = selectedSession == "First Half",
-                    onClick = { onSessionSelected("First Half") },
-                    modifier = Modifier.weight(1f)
-                )
-                SessionOptionButton(
-                    title = "Second Half (Afternoon)",
-                    icon = Icons.Rounded.Bedtime,
-                    isSelected = selectedSession == "Second Half",
-                    onClick = { onSessionSelected("Second Half") },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // Summary Strip
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(Slate200.copy(alpha = 0.7f))
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Box(
+                // Holiday Banner Pill
+                Surface(
                     modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(BrandRed)
-                )
-                Text(
-                    text = "Selected: ",
-                    fontSize = 12.sp,
-                    color = Slate700
-                )
-                Text(
-                    text = selectedDatesFormatted,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = BrandRed
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (isHalfDay) {
-                    Box(
+                        .weight(1f)
+                        .padding(end = 0.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = BrandLightRed,
+                    border = BorderStroke(1.dp, BrandRedBorder.copy(alpha = 0.7f))
+                ) {
+                    Row(
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .background(Slate100)
-                            .border(1.dp, Slate200.copy(alpha = 0.7f), CircleShape)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = selectedSession,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Slate600
-                        )
+                        Row(
+                            modifier = Modifier.weight(1f, fill = false),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandRed)
+                            )
+                            if (holidays.isNotEmpty()) {
+                                val safeIndex = holidayIndex.coerceIn(0, holidays.size - 1)
+                                val currentHoliday = holidays[safeIndex]
+                                val holidayDateStr = currentHoliday.date.format(DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Public Holiday: ",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BrandRedHover
+                                    )
+                                    Text(
+                                        text = "$holidayDateStr (${currentHoliday.name})",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = BrandRed,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "No public holidays this month",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Slate600
+                                )
+                            }
+                        }
+
+                        if (holidays.size > 1) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            holidayIndex = if (holidayIndex > 0) holidayIndex - 1 else holidays.size - 1
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ChevronLeft,
+                                        contentDescription = "Previous Holiday",
+                                        tint = Amber800,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+
+                                Text(
+                                    text = "${holidayIndex.coerceIn(0, holidays.size - 1) + 1} of ${holidays.size}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Amber900,
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            holidayIndex = if (holidayIndex < holidays.size - 1) holidayIndex + 1 else 0
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ChevronRight,
+                                        contentDescription = "Next Holiday",
+                                        tint = Amber800,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(BrandLightRed)
-                        .border(1.dp, BrandRedBorder, CircleShape)
-                        .padding(horizontal = 10.dp, vertical = 2.dp)
+//                // Legend
+//                Row(
+//                    verticalAlignment = Alignment.CenterVertically,
+//                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+//                ) {
+//                    Box(
+//                        modifier = Modifier
+//                            .size(6.dp)
+//                            .clip(CircleShape)
+//                            .background(Amber500)
+//                    )
+//                    Text(
+//                        text = "Holiday",
+//                        fontSize = 10.sp,
+//                        fontWeight = FontWeight.SemiBold,
+//                        color = Slate400
+//                    )
+//                }
+            }
+
+            // Leave Duration Section & Half Day Switch
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Slate200.copy(alpha = 0.6f))
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Timelapse,
+                        contentDescription = "Duration",
+                        tint = Slate400,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "LEAVE DURATION",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Slate500,
+                        letterSpacing = 0.8.sp
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = durationText,
-                        fontSize = 11.sp,
+                        text = "Half Day",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Slate600
+                    )
+
+                    // Custom Switch
+                    Box(
+                        modifier = Modifier
+                            .size(width = 40.dp, height = 20.dp)
+                            .clip(CircleShape)
+                            .background(if (isHalfDay) BrandRed else Slate200)
+                            .clickable(onClick = onToggleHalfDay)
+                            .padding(2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .offset(x = if (isHalfDay) 20.dp else 0.dp)
+                                .shadow(1.dp, CircleShape)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                        )
+                    }
+                }
+            }
+
+            // Half Day Session Options
+            AnimatedVisibility(visible = isHalfDay) {
+                Column {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        SessionOptionButton(
+                            title = "First Half (Morning)",
+                            icon = Icons.Rounded.WbSunny,
+                            isSelected = selectedSession == "First Half",
+                            onClick = { onSessionSelected("First Half") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        SessionOptionButton(
+                            title = "Second Half (Afternoon)",
+                            icon = Icons.Rounded.Bedtime,
+                            isSelected = selectedSession == "Second Half",
+                            onClick = { onSessionSelected("Second Half") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // Selected Dates & Duration Badge Summary
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Slate200.copy(alpha = 0.7f))
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val durationText = remember(selectedStartDate, selectedEndDate, isHalfDay) {
+                if (isHalfDay) {
+                    "0.5 Day (Half Day)"
+                } else {
+                    val days = ChronoUnit.DAYS.between(selectedStartDate, selectedEndDate) + 1
+                    if (days <= 1) "1 Day" else "$days Days"
+                }
+            }
+
+            val selectedDatesFormatted = remember(selectedStartDate, selectedEndDate, isHalfDay) {
+                val formatter = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH)
+                if (isHalfDay || selectedStartDate == selectedEndDate) {
+                    selectedStartDate.format(formatter)
+                } else {
+                    "${selectedStartDate.format(formatter)} – ${selectedEndDate.format(formatter)}"
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(BrandRed)
+                    )
+                    Text(
+                        text = "Selected: ",
+                        fontSize = 12.sp,
+                        color = Slate700
+                    )
+                    Text(
+                        text = selectedDatesFormatted,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = BrandRed
                     )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (isHalfDay) {
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Slate100)
+                                .border(1.dp, Slate200.copy(alpha = 0.7f), CircleShape)
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = selectedSession,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Slate600
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(BrandLightRed)
+                            .border(1.dp, BrandRedBorder, CircleShape)
+                            .padding(horizontal = 10.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = durationText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandRed
+                        )
+                    }
                 }
             }
         }
@@ -1353,6 +1698,7 @@ private fun ApproverHandoverCard() {
 @Composable
 private fun SwipeToSubmitSlider(
     isLoading: Boolean,
+    resetTrigger: Int = 0,
     onSubmit: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -1362,6 +1708,13 @@ private fun SwipeToSubmitSlider(
     val knobSizePx = with(LocalDensity.current) { knobSizeDp.toPx() }
     val maxDragDistance = (trackWidthPx - knobSizePx - 8f).coerceAtLeast(0f)
     var isSubmitted by remember { mutableStateOf(false) }
+
+    LaunchedEffect(resetTrigger) {
+        if (resetTrigger > 0) {
+            isSubmitted = false
+            dragOffsetX.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -1546,7 +1899,39 @@ private fun RecentLeaveHistorySection(leaves: List<LeaveDto>) {
             letterSpacing = 0.8.sp
         )
 
+        if (leaves.isEmpty()) {
+            Text(
+                text = "No leave requests yet.",
+                fontSize = 12.sp,
+                color = Slate500,
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
+        }
+
         leaves.take(4).forEach { leave ->
+            val fromParsed = try { LocalDate.parse(leave.from.orEmpty()) } catch(e: Exception) { null }
+            val toParsed = try { LocalDate.parse(leave.to.orEmpty()) } catch(e: Exception) { null }
+            val fromFormatted = fromParsed?.format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)) ?: leave.from.orEmpty()
+            val toFormatted = toParsed?.format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)) ?: leave.to.orEmpty()
+
+            val dateRange = when {
+                fromFormatted.isNotBlank() && toFormatted.isNotBlank() -> {
+                    if (fromFormatted == toFormatted) fromFormatted else "$fromFormatted to $toFormatted"
+                }
+                !leave.from.isNullOrBlank() && !leave.to.isNullOrBlank() -> {
+                    if (leave.from == leave.to) leave.from.orEmpty() else "${leave.from} to ${leave.to}"
+                }
+                !leave.from.isNullOrBlank() -> leave.from.orEmpty()
+                else -> "Leave"
+            }
+            
+            // Format float without trailing .0
+            val formatDays = { value: Float? ->
+                if (value == null) ""
+                else if (value % 1.0f == 0.0f) value.toInt().toString()
+                else String.format("%.1f", value)
+            }
+
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -1554,48 +1939,103 @@ private fun RecentLeaveHistorySection(leaves: List<LeaveDto>) {
                 border = BorderStroke(1.dp, Slate100),
                 shadowElevation = 0.5.dp
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = "${leave.from.orEmpty()} → ${leave.to.orEmpty()}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Slate900
-                        )
-                        Text(
-                            text = "${leave.type.orEmpty()} • ${leave.reason.orEmpty()}",
-                            fontSize = 11.sp,
-                            color = Slate500,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    val status = leave.status.orEmpty().lowercase()
-                    val (badgeBg, badgeText) = when {
-                        status.contains("approv") -> Emerald50 to Emerald600
-                        status.contains("reject") -> BrandLightRed to BrandRed
-                        else -> Amber50 to Amber600
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(badgeBg)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = leave.status.orEmpty().ifBlank { "Pending" },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = badgeText
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = dateRange,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Slate900
+                                )
+                                Text(
+                                    text = "•",
+                                    fontSize = 11.sp,
+                                    color = Slate300
+                                )
+                                Text(
+                                    text = leave.type.orEmpty().ifBlank { "Leave" },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Slate700
+                                )
+                            }
+//                            if (!leave.requestId.isNullOrBlank()) {
+//                                Text(
+//                                    text = leave.requestId,
+//                                    fontSize = 11.sp,
+//                                    fontWeight = FontWeight.Medium,
+//                                    color = Slate400
+//                                )
+//                            }
+                        }
+
+                        val status = leave.status.orEmpty().lowercase()
+                        val (badgeBg, badgeText) = when {
+                            status.contains("approv") -> Emerald50 to Emerald600
+                            status.contains("reject") -> BrandLightRed to BrandRed
+                            else -> Amber50 to Amber600
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(badgeBg)
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = leave.status.orEmpty().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }.ifBlank { "Pending" },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = badgeText
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = leave.reason.orEmpty(),
+                        fontSize = 12.sp,
+                        color = Slate500,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (leave.leaveDays != null) {
+                            Text(text = "Total: ${formatDays(leave.leaveDays)}d", fontSize = 11.sp, color = Slate600, fontWeight = FontWeight.Medium)
+                        }
+                        if (leave.paidLeaveDays != null) {
+                            Text(text = "Paid: ${formatDays(leave.paidLeaveDays)}d", fontSize = 11.sp, color = Emerald600, fontWeight = FontWeight.Medium)
+                        }
+                        if (leave.lopDays != null && leave.lopDays > 0f) {
+                            Text(text = "LOP: ${formatDays(leave.lopDays)}d", fontSize = 11.sp, color = BrandRed, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    
+                    if (!leave.managerComment.isNullOrBlank()) {
+                        Surface(
+                            color = Slate50,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Admin: ${leave.managerComment}",
+                                fontSize = 11.sp,
+                                color = Slate700,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
                     }
                 }
             }

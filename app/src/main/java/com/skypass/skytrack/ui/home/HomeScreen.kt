@@ -221,6 +221,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 CheckOutActionButton(
                     isLoading = state.isActionLoading || state.isEndingWork,
+                    isOnBreak = state.isOnBreak,
                     onEndShift = { viewModel.endWork(session) }
                 )
             }
@@ -609,9 +610,10 @@ fun OnBreakHero(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Resume Work Button
+                    // End Break Button
                     Button(
                         onClick = onResumeWork,
+                        enabled = !state.isActionLoading,
                         modifier = Modifier
                             .scale(resumeScale)
                             .height(30.dp),
@@ -624,7 +626,7 @@ fun OnBreakHero(
                         interactionSource = resumeInteraction
                     ) {
                         Text(
-                            text = "Resume Work",
+                            text = "End Break",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White
@@ -731,6 +733,7 @@ fun CircularBreakHero(
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,
+                        enabled = !state.isActionLoading,
                         onClick = onTakeBreak
                     ),
                 contentAlignment = Alignment.Center
@@ -740,11 +743,11 @@ fun CircularBreakHero(
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    // Take Break Action Pill
+                    // Start Break Action Pill
                     val isOnBreak = state.isOnBreak
                     val pillBg = if (isOnBreak) Color(0xFFFEF3C7) else Amber50
                     val pillBorder = if (isOnBreak) Amber600 else Amber200.copy(alpha = 0.6f)
-                    val pillText = if (isOnBreak) "Resume Work" else "Take Break"
+                    val pillText = if (isOnBreak) "End Break" else "Start Break"
 
                     Row(
                         modifier = Modifier
@@ -1069,7 +1072,8 @@ fun AttendanceClockArea(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     // Secondary tap hint / time counter
-                    val hint = if (hasEnded) "Tap to record next session" else "Current time: $currentTimeStr"
+//                    val hint = if (hasEnded) "Tap to record next session" else "Current time: $currentTimeStr"
+                    val hint = "Current time: $currentTimeStr"
                     Text(
                         text = hint,
                         color = Slate400,
@@ -1088,6 +1092,7 @@ fun AttendanceClockArea(
 @Composable
 fun CheckOutActionButton(
     isLoading: Boolean,
+    isOnBreak: Boolean = false,
     onEndShift: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1098,24 +1103,32 @@ fun CheckOutActionButton(
         label = "checkoutButtonScale"
     )
 
+    val isButtonEnabled = !isLoading && !isOnBreak
+    val containerBg = if (isOnBreak) Slate100 else CardSurface
+    val textLabel = if (isOnBreak) "End Break before Check-Out" else "End Shift / Check-Out"
+    val textColor = if (isOnBreak) Slate400 else Slate700
+    val iconTint = if (isOnBreak) Slate400 else BrandColor
+
     Button(
         onClick = onEndShift,
-        enabled = !isLoading,
+        enabled = isButtonEnabled,
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
             .height(50.dp)
             .shadow(
-                elevation = 2.dp,
+                elevation = if (isOnBreak) 0.dp else 2.dp,
                 shape = RoundedCornerShape(16.dp),
                 spotColor = Color.Black.copy(alpha = 0.04f)
             ),
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = CardSurface,
-            contentColor = Slate700
+            containerColor = containerBg,
+            contentColor = textColor,
+            disabledContainerColor = Slate100,
+            disabledContentColor = Slate400
         ),
-        border = BorderStroke(1.dp, Slate200),
+        border = BorderStroke(1.dp, if (isOnBreak) Slate200.copy(alpha = 0.5f) else Slate200),
         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
         interactionSource = interactionSource
     ) {
@@ -1126,12 +1139,12 @@ fun CheckOutActionButton(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.Logout,
                 contentDescription = null,
-                tint = BrandColor,
+                tint = iconTint,
                 modifier = Modifier.size(16.dp)
             )
             Text(
-                text = "End Shift / Check-Out",
-                color = Slate700,
+                text = textLabel,
+                color = textColor,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.2.sp

@@ -19,6 +19,8 @@ class AttendanceRepository @Inject constructor(
 
     suspend fun startBreak(token: String): Result<AttendanceDto?> = request("start_break", token)
 
+    suspend fun endBreak(token: String): Result<AttendanceDto?> = request("end_break", token)
+
     suspend fun resumeWork(token: String): Result<AttendanceDto?> = request("resume_work", token)
 
     private suspend fun request(action: String, token: String): Result<AttendanceDto?> =
@@ -35,6 +37,11 @@ class AttendanceRepository @Inject constructor(
                     AttendanceRequest(action, token)
                 )
                 "start_break" -> api.startBreak(
+                    BuildConfig.SKYTRACK_API_URL,
+                    "Bearer $token",
+                    AttendanceRequest(action, token)
+                )
+                "end_break" -> api.endBreak(
                     BuildConfig.SKYTRACK_API_URL,
                     "Bearer $token",
                     AttendanceRequest(action, token)

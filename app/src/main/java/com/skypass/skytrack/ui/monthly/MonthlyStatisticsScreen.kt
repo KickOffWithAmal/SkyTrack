@@ -43,8 +43,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import android.widget.Toast
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +60,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +71,10 @@ import com.skypass.skytrack.data.remote.MonthlyAttendanceDto
 import com.skypass.skytrack.data.remote.MonthlyAttendanceSummary
 import com.skypass.skytrack.ui.components.SkyTrackBottomNavigationDock
 import com.skypass.skytrack.ui.components.SkyTrackNavTab
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -113,6 +120,28 @@ fun MonthlyStatisticsScreen(
     val state by viewModel.uiState.collectAsState()
     var selectedFilterIndex by remember { mutableIntStateOf(0) } // 0: All, 1: Present, 2: Leaves
 
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var pdfFileToShow by remember { mutableStateOf<File?>(null) }
+    var isExportingPdf by remember { mutableStateOf(false) }
+
+    val monthTitle = remember(state.summary?.month) {
+        val raw = state.summary?.month
+        if (raw.isNullOrBlank()) {
+            "February 2026"
+        } else {
+            try {
+                if (raw.length == 7) {
+                    YearMonth.parse(raw).format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH))
+                } else {
+                    raw
+                }
+            } catch (_: Exception) {
+                raw
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -136,14 +165,14 @@ fun MonthlyStatisticsScreen(
 
             // User Greeting Section
             MonthlyUserGreeting(
-                name = session?.name ?: "Amal Ramachandran",
+                name = session?.name ?: "User",
                 employeeId = session?.employeeId ?: "SK001"
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // Central Circular Dial (Cumulative Work Hours)
-            CentralCircularDial(summary = state.summary)
+            CentralCircularDial(summary = state.summary, uiState = state)
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -153,7 +182,40 @@ fun MonthlyStatisticsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Action Banner (Timesheet Export)
-            TimesheetExportCard()
+            TimesheetExportCard(
+                isExporting = isExportingPdf,
+                targetHours = (state.summary?.workingDays ?: 20) * 8,
+                onExportClick = {
+                    if (!isExportingPdf) {
+                        coroutineScope.launch {
+                            isExportingPdf = true
+                            try {
+                                val rawMonth = state.summary?.month ?: YearMonth.now().toString()
+                                val file = withContext(Dispatchers.IO) {
+                                    TimesheetPdfGenerator.generateTimesheetPdf(
+                                        context = context,
+                                        monthRaw = rawMonth,
+                                        monthTitle = monthTitle,
+                                        session = session,
+                                        summary = state.summary,
+                                        attendance = state.attendance,
+                                        totalActiveHoursStr = state.totalActiveHoursStr
+                                    )
+                                }
+                                pdfFileToShow = file
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "Error generating PDF: ${e.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } finally {
+                                isExportingPdf = false
+                            }
+                        }
+                    }
+                }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -181,6 +243,16 @@ fun MonthlyStatisticsScreen(
         com.skypass.skytrack.ui.components.SkyTrackLoadingOverlay(
             visible = state.isLoading
         )
+
+        // Monthly Timesheet PDF In-App Preview Dialog
+        if (pdfFileToShow != null) {
+            TimesheetPdfViewerDialog(
+                pdfFile = pdfFileToShow!!,
+                monthTitle = monthTitle,
+                employeeName = session?.name ?: "Employee",
+                onDismiss = { pdfFileToShow = null }
+            )
+        }
     }
 }
 
@@ -268,8 +340,9 @@ private fun MonthlyTopHeader(
                     letterSpacing = (-0.4).sp
                 )
 
+                val displayTargetHours = summary?.targetHoursFormatted ?: "${targetHours}h"
                 Text(
-                    text = "$workingDays Working Days • $targetHours hrs Target",
+                    text = "$workingDays Working Days • $displayTargetHours Target",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = Slate500
@@ -374,27 +447,57 @@ private fun MonthlyUserGreeting(
 // CENTRAL CIRCULAR DIAL (HERO GAUGE)
 // -------------------------------------------------------------
 @Composable
-private fun CentralCircularDial(summary: MonthlyAttendanceSummary?) {
-    val totalHoursStr = summary?.totalHours?.ifBlank { "148:30" } ?: "148:30"
-    val workingDays = summary?.workingDays ?: 20
-    val targetHours = workingDays * 8.0
+private fun CentralCircularDial(summary: MonthlyAttendanceSummary?, uiState: MonthlyStatisticsUiState) {
+    val totalHoursStr = uiState.totalActiveHoursStr.ifBlank { "0h 00m" }
+    val targetHoursStr = uiState.actualHoursNeededStr.ifBlank { "${(summary?.workingDays ?: 20) * 8}h" }
 
     // Parse logged hours to calculate percentage
     val loggedHoursVal = remember(totalHoursStr) {
         try {
-            val parts = totalHoursStr.split(":")
-            if (parts.size >= 2) {
-                parts[0].toDouble() + (parts[1].toDouble() / 60.0)
+            val match = Regex("""(\d+)h\s*(\d+)m""").find(totalHoursStr)
+            if (match != null) {
+                val h = match.groupValues[1].toDoubleOrNull() ?: 0.0
+                val m = match.groupValues[2].toDoubleOrNull() ?: 0.0
+                h + (m / 60.0)
             } else {
-                totalHoursStr.toDoubleOrNull() ?: 148.5
+                val parts = totalHoursStr.split(":")
+                if (parts.size >= 2) {
+                    val h = parts[0].trim().toDoubleOrNull() ?: 0.0
+                    val m = parts[1].trim().toDoubleOrNull() ?: 0.0
+                    h + (m / 60.0)
+                } else {
+                    totalHoursStr.replace(Regex("""[^\d.]"""), "").toDoubleOrNull() ?: 0.0
+                }
             }
         } catch (_: Exception) {
-            148.5
+            0.0
         }
     }
 
-    val progressFraction = remember(loggedHoursVal, targetHours) {
-        (loggedHoursVal / targetHours).coerceIn(0.0, 1.0).toFloat()
+    val targetHoursVal = remember(targetHoursStr) {
+        try {
+            val match = Regex("""(\d+)h\s*(\d*)m?""").find(targetHoursStr)
+            if (match != null) {
+                val h = match.groupValues[1].toDoubleOrNull() ?: 0.0
+                val m = match.groupValues.getOrNull(2)?.toDoubleOrNull() ?: 0.0
+                h + (m / 60.0)
+            } else {
+                val parts = targetHoursStr.split(":")
+                if (parts.size >= 2) {
+                    val h = parts[0].trim().toDoubleOrNull() ?: 0.0
+                    val m = parts[1].trim().toDoubleOrNull() ?: 0.0
+                    h + (m / 60.0)
+                } else {
+                    targetHoursStr.replace(Regex("""[^\d.]"""), "").toDoubleOrNull() ?: 160.0
+                }
+            }
+        } catch (_: Exception) {
+            160.0
+        }.let { if (it <= 0) 160.0 else it }
+    }
+
+    val progressFraction = remember(loggedHoursVal, targetHoursVal) {
+        (loggedHoursVal / targetHoursVal).coerceIn(0.0, 1.0).toFloat()
     }
 
     val animatedSweep by animateFloatAsState(
@@ -462,7 +565,7 @@ private fun CentralCircularDial(summary: MonthlyAttendanceSummary?) {
                 modifier = Modifier.padding(16.dp)
             ) {
                 Text(
-                    text = "TOTAL LOGGED HOURS",
+                    text = "TOTAL ACTIVE HOURS",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = Slate400,
@@ -471,7 +574,7 @@ private fun CentralCircularDial(summary: MonthlyAttendanceSummary?) {
 
                 Text(
                     text = totalHoursStr,
-                    fontSize = 38.sp,
+                    fontSize = if (totalHoursStr.length > 7) 32.sp else 38.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Slate900,
                     letterSpacing = (-1.0).sp,
@@ -479,46 +582,46 @@ private fun CentralCircularDial(summary: MonthlyAttendanceSummary?) {
                 )
 
                 // Remaining Quota Capsule Badge
-                Surface(
-                    shape = CircleShape,
-                    color = Rose50,
-                    border = BorderStroke(1.dp, Rose100),
-                    modifier = Modifier.padding(top = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.AccessTime,
-                            contentDescription = "Quota",
-                            tint = BrandRed,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "11h 30m left in quota",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = BrandRed
-                        )
-                    }
-                }
+//                Surface(
+//                    shape = CircleShape,
+//                    color = Rose50,
+//                    border = BorderStroke(1.dp, Rose100),
+//                    modifier = Modifier.padding(top = 4.dp)
+//                ) {
+//                    Row(
+//                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+//                        verticalAlignment = Alignment.CenterVertically,
+//                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+//                    ) {
+//                        Icon(
+//                            imageVector = Icons.Rounded.AccessTime,
+//                            contentDescription = "Quota",
+//                            tint = BrandRed,
+//                            modifier = Modifier.size(13.dp)
+//                        )
+//                        Text(
+//                            text = "11h 30m left in quota",
+//                            fontSize = 11.sp,
+//                            fontWeight = FontWeight.SemiBold,
+//                            color = BrandRed
+//                        )
+//                    }
+//                }
 
-                // Overtime Indicator Chip
+                // Actual Hours Needed Chip
                 Row(
                     modifier = Modifier.padding(top = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.TrendingUp,
-                        contentDescription = "Overtime",
+                        imageVector = Icons.Rounded.AccessTime,
+                        contentDescription = "Target",
                         tint = Emerald600,
                         modifier = Modifier.size(12.dp)
                     )
                     Text(
-                        text = "+4h 30m Overtime",
+                        text = "${uiState.actualHoursNeededStr} Actual Needed",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = Emerald600
@@ -537,8 +640,8 @@ private fun TrioMetricCardsGrid(summary: MonthlyAttendanceSummary?) {
     val presentDays = summary?.presentDays ?: 18
     val workingDays = (summary?.workingDays ?: 20).coerceAtLeast(1)
     val absentDays = summary?.absentDays ?: 2
-    val averageHours = summary?.averageHours?.ifBlank { "8h 15m" } ?: "8h 15m"
-    val presentPercent = ((presentDays.toDouble() / workingDays.toDouble()) * 100).toInt()
+    val averageHours = summary?.averageHours?.ifBlank { "0h 0m" } ?: "0h 0m"
+    val presentPercent = summary?.presentPercent ?: ((presentDays.toDouble() / workingDays.toDouble()) * 100).toInt()
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -665,39 +768,43 @@ private fun TrioCard(
 // TIMESHEET EXPORT CARD WITH TOOLTIP
 // -------------------------------------------------------------
 @Composable
-private fun TimesheetExportCard() {
+private fun TimesheetExportCard(
+    isExporting: Boolean,
+    targetHours: Int,
+    onExportClick: () -> Unit
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Tooltip with downward triangle pointer
-        Box(
-            modifier = Modifier
-                .shadow(2.dp, RoundedCornerShape(8.dp))
-                .clip(RoundedCornerShape(8.dp))
-                .background(Slate900)
-                .padding(horizontal = 14.dp, vertical = 6.dp)
-        ) {
-            Text(
-                text = "Target: 160 hrs • 2 Days Remaining",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
-            )
-        }
+//        // Tooltip with downward triangle pointer
+//        Box(
+//            modifier = Modifier
+//                .shadow(2.dp, RoundedCornerShape(8.dp))
+//                .clip(RoundedCornerShape(8.dp))
+//                .background(Slate900)
+//                .padding(horizontal = 14.dp, vertical = 6.dp)
+//        ) {
+//            Text(
+//                text = "Target: $targetHours hrs • Export Timesheet PDF",
+//                fontSize = 11.sp,
+//                fontWeight = FontWeight.SemiBold,
+//                color = Color.White
+//            )
+//        }
 
         // Downward Triangle Pointer
-        Canvas(modifier = Modifier.size(width = 12.dp, height = 6.dp)) {
-            val path = Path().apply {
-                moveTo(0f, 0f)
-                lineTo(size.width, 0f)
-                lineTo(size.width / 2f, size.height)
-                close()
-            }
-            drawPath(path, color = Slate900)
-        }
+//        Canvas(modifier = Modifier.size(width = 12.dp, height = 6.dp)) {
+//            val path = Path().apply {
+//                moveTo(0f, 0f)
+//                lineTo(size.width, 0f)
+//                lineTo(size.width / 2f, size.height)
+//                close()
+//            }
+//            drawPath(path, color = Slate900)
+//        }
 
-        Spacer(modifier = Modifier.height(4.dp))
+//        Spacer(modifier = Modifier.height(4.dp))
 
         // Timesheet PDF Action Card
         Surface(
@@ -741,7 +848,7 @@ private fun TimesheetExportCard() {
                             color = Slate800
                         )
                         Text(
-                            text = "Official Visa Operations Signature",
+                            text = "Check In/Out • Break & Active Hours",
                             fontSize = 10.sp,
                             color = Slate400
                         )
@@ -749,18 +856,31 @@ private fun TimesheetExportCard() {
                 }
 
                 Surface(
-                    onClick = { /* Export PDF handler */ },
+                    onClick = onExportClick,
+                    enabled = !isExporting,
                     shape = RoundedCornerShape(12.dp),
-                    color = BrandRed,
-                    shadowElevation = 2.dp
+                    color = if (isExporting) Slate400 else BrandRed,
+                    shadowElevation = if (isExporting) 0.dp else 2.dp
                 ) {
-                    Text(
-                        text = "Export",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                    )
+                    ) {
+                        if (isExporting) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                        Text(
+                            text = if (isExporting) "Generating..." else "Export",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -777,7 +897,7 @@ private fun DailyAttendanceLogSection(
     onFilterSelected: (Int) -> Unit
 ) {
     val presentCount = remember(attendanceList) {
-        attendanceList.count { it.status.contains("present", ignoreCase = true) || it.hours.isNotBlank() }
+        attendanceList.count { it.status.contains("present", ignoreCase = true) || !it.hours.isNullOrBlank() }
     }
     val leaveCount = remember(attendanceList) {
         attendanceList.count { it.status.contains("leave", ignoreCase = true) || it.status.contains("absent", ignoreCase = true) }
@@ -785,7 +905,7 @@ private fun DailyAttendanceLogSection(
 
     val filteredList = remember(attendanceList, selectedFilterIndex) {
         when (selectedFilterIndex) {
-            1 -> attendanceList.filter { it.status.contains("present", ignoreCase = true) || (it.login.isNotBlank() && it.status.isBlank()) }
+            1 -> attendanceList.filter { it.status.contains("present", ignoreCase = true) || (!it.login.isNullOrBlank() && it.status.isBlank()) }
             2 -> attendanceList.filter { it.status.contains("leave", ignoreCase = true) || it.status.contains("absent", ignoreCase = true) }
             else -> attendanceList
         }
@@ -899,7 +1019,7 @@ private fun FilterTabButton(
 @Composable
 private fun AttendanceRecordCard(item: MonthlyAttendanceDto) {
     val statusLower = item.status.lowercase()
-    val isPresent = statusLower.contains("present") || (item.login.isNotBlank() && item.status.isBlank())
+    val isPresent = statusLower.contains("present") || (!item.login.isNullOrBlank() && item.status.isBlank())
     val isSick = statusLower.contains("sick")
     val isCasual = statusLower.contains("casual")
     val isLeave = isSick || isCasual || statusLower.contains("leave") || statusLower.contains("absent")
@@ -922,12 +1042,12 @@ private fun AttendanceRecordCard(item: MonthlyAttendanceDto) {
     val timeSubtitle = if (isLeave) {
         "Approved • Verified"
     } else {
-        val inTime = if (item.login.isNotBlank()) item.login else "09:00 AM"
-        val outTime = if (item.logout.isNotBlank()) item.logout else "06:00 PM"
+        val inTime = if (!item.login.isNullOrBlank()) item.login else "09:00 AM"
+        val outTime = if (!item.logout.isNullOrBlank()) item.logout else "06:00 PM"
         "$inTime - $outTime"
     }
 
-    val hoursRightText = if (isLeave) "Full Day" else item.hours.ifBlank { "8h 00m" }
+    val hoursRightText = if (isLeave) "Full Day" else item.hours?.ifBlank { "8h 00m" } ?: "8h 00m"
     val otSubtitle = if (isLeave) "Paid Off" else "+10m OT"
 
     Surface(

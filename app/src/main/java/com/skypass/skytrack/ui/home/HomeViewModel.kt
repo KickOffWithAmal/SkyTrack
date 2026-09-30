@@ -118,6 +118,15 @@ class HomeViewModel @Inject constructor(
     }
 
     fun endWork(session: Session) {
+        if (_state.value.isActionLoading) {
+            return
+        }
+        if (_state.value.isOnBreak) {
+            _state.value = _state.value.copy(
+                error = "Cannot end work while a break is still active. Please end your break first."
+            )
+            return
+        }
         val nowTime = LocalTime.now().format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH))
         val current = _state.value.attendance ?: AttendanceDto(
             date = LocalDate.now().toString(),
@@ -140,6 +149,9 @@ class HomeViewModel @Inject constructor(
     }
 
     fun toggleBreak(session: Session) {
+        if (_state.value.isActionLoading) {
+            return
+        }
         val nextBreak = !_state.value.isOnBreak
         _state.value = _state.value.copy(
             isActionLoading = true,
@@ -152,16 +164,19 @@ class HomeViewModel @Inject constructor(
             val result = if (nextBreak) {
                 attendanceRepository.startBreak(session.token)
             } else {
-                attendanceRepository.resumeWork(session.token)
+                attendanceRepository.endBreak(session.token)
             }
 
             result.onSuccess { attendance ->
+                val serverIsOnBreak = attendance?.isOnBreak ?: nextBreak
+                val baseBreakSeconds = attendance?.totalBreakSeconds ?: _state.value.breakSeconds
                 _state.value = _state.value.copy(
                     attendance = attendance ?: _state.value.attendance,
-                    isOnBreak = nextBreak,
+                    isOnBreak = serverIsOnBreak,
+                    breakSeconds = baseBreakSeconds,
                     isActionLoading = false
                 )
-                if (nextBreak) {
+                if (serverIsOnBreak) {
                     startBreakTimer()
                 }
             }.onFailure { error ->
@@ -291,10 +306,13 @@ class HomeViewModel @Inject constructor(
             return
         }
 
-        val message = when (apiError?.code) {
+        val message = when (apiError?.code?.uppercase()) {
             "ALREADY_STARTED" -> "Work has already been started for today."
             "NOT_STARTED" -> "You have not started work today."
             "ALREADY_ENDED" -> "Work has already been ended for today."
+            "ALREADY_ON_BREAK" -> "Cannot start another break while already on a break."
+            "NO_ACTIVE_BREAK" -> "Cannot end a break when no break is active."
+            "ACTIVE_BREAK" -> "Cannot end work while a break is still active. Please end your break first."
             "INVALID_REQUEST" -> apiError.message
             else -> when (error) {
                 is UnknownHostException, is ConnectException ->

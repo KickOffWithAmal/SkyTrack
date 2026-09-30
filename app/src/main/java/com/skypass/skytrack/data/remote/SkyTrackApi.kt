@@ -35,6 +35,13 @@ interface SkyTrackApi {
     ): AttendanceResponse
 
     @POST
+    suspend fun endBreak(
+        @Url endpoint: String,
+        @Header("Authorization") authorization: String,
+        @Body request: AttendanceRequest
+    ): AttendanceResponse
+
+    @POST
     suspend fun resumeWork(
         @Url endpoint: String,
         @Header("Authorization") authorization: String,
@@ -59,8 +66,15 @@ interface SkyTrackApi {
     suspend fun leaveHistory(
         @Url endpoint: String,
         @Header("Authorization") authorization: String,
-        @Body request: AttendanceRequest
+        @Body request: LeaveHistoryRequest
     ): LeaveResponse
+
+    @POST
+    suspend fun leaveBalance(
+        @Url endpoint: String,
+        @Header("Authorization") authorization: String,
+        @Body request: LeaveBalanceRequest
+    ): LeaveBalanceResponse
 
     @POST
     suspend fun attendanceMonthly(
@@ -68,4 +82,12 @@ interface SkyTrackApi {
         @Header("Authorization") authorization: String,
         @Body request: MonthlyAttendanceRequest
     ): MonthlyAttendanceResponse
+
+    @POST
+    suspend fun publicHolidays(
+        @Url endpoint: String,
+        @Header("Authorization") authorization: String,
+        @Body request: AttendanceRequest
+    ): HolidayResponse
 }
+

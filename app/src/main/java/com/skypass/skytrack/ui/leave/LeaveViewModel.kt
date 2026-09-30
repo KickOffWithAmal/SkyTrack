@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skypass.skytrack.data.local.Session
 import com.skypass.skytrack.data.remote.LeaveDto
+import com.skypass.skytrack.data.remote.LeaveBalanceDataDto
 import com.skypass.skytrack.data.repository.AuthRepository
 import com.skypass.skytrack.data.repository.LeaveApiException
 import com.skypass.skytrack.data.repository.LeaveRepository
@@ -11,6 +12,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.net.ConnectException
 import java.net.UnknownHostException
 import javax.inject.Inject
+import com.skypass.skytrack.data.remote.PublicHoliday
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +20,8 @@ import kotlinx.coroutines.launch
 
 data class LeaveUiState(
     val leaves: List<LeaveDto> = emptyList(),
+    val balance: LeaveBalanceDataDto? = null,
+    val holidays: List<PublicHoliday> = emptyList(),
     val isLoading: Boolean = true,
     val isSubmitting: Boolean = false,
     val successMessage: String? = null,
@@ -38,14 +42,28 @@ class LeaveViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
 
+            val holidaysResult = repository.publicHolidays(session.token)
+            val holidays = holidaysResult.getOrNull()
+
+            val balanceResult = repository.balance(session.token)
+            val balanceData = balanceResult.getOrNull()
+
             repository.history(session.token)
                 .onSuccess { leaves ->
                     _state.value = _state.value.copy(
                         leaves = leaves,
+                        balance = balanceData,
+                        holidays = holidays ?: _state.value.holidays,
                         isLoading = false
                     )
                 }
-                .onFailure { handleFailure(it) }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        balance = balanceData,
+                        holidays = holidays ?: _state.value.holidays
+                    )
+                    handleFailure(it)
+                }
         }
     }
 
