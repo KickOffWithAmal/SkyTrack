@@ -19,49 +19,57 @@ class AttendanceRepository @Inject constructor(
 
     suspend fun startBreak(token: String): Result<AttendanceDto?> = request("start_break", token)
 
-    suspend fun endBreak(token: String): Result<AttendanceDto?> = request("end_break", token)
-
     suspend fun resumeWork(token: String): Result<AttendanceDto?> = request("resume_work", token)
 
     private suspend fun request(action: String, token: String): Result<AttendanceDto?> =
         runCatching {
-            val response = when (action) {
-                "start_work" -> api.startWork(
-                    BuildConfig.SKYTRACK_API_URL,
-                    "Bearer $token",
-                    AttendanceRequest(action, token)
+            val response = try {
+                when (action) {
+                    "start_work" -> api.startWork(
+                        BuildConfig.SKYTRACK_API_URL,
+                        "Bearer $token",
+                        AttendanceRequest(action, token)
+                    )
+                    "end_work" -> api.endWork(
+                        BuildConfig.SKYTRACK_API_URL,
+                        "Bearer $token",
+                        AttendanceRequest(action, token)
+                    )
+                    "start_break" -> api.startBreak(
+                        BuildConfig.SKYTRACK_API_URL,
+                        "Bearer $token",
+                        AttendanceRequest(action, token)
+                    )
+                    "resume_work" -> api.resumeWork(
+                        BuildConfig.SKYTRACK_API_URL,
+                        "Bearer $token",
+                        AttendanceRequest(action, token)
+                    )
+                    else -> api.attendanceToday(
+                        BuildConfig.SKYTRACK_API_URL,
+                        "Bearer $token",
+                        AttendanceRequest(action, token)
+                    )
+                }
+            } catch (httpException: retrofit2.HttpException) {
+                val friendly = com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(
+                    httpException,
+                    "Attendance request failed. Please try again."
                 )
-                "end_work" -> api.endWork(
-                    BuildConfig.SKYTRACK_API_URL,
-                    "Bearer $token",
-                    AttendanceRequest(action, token)
-                )
-                "start_break" -> api.startBreak(
-                    BuildConfig.SKYTRACK_API_URL,
-                    "Bearer $token",
-                    AttendanceRequest(action, token)
-                )
-                "end_break" -> api.endBreak(
-                    BuildConfig.SKYTRACK_API_URL,
-                    "Bearer $token",
-                    AttendanceRequest(action, token)
-                )
-                "resume_work" -> api.resumeWork(
-                    BuildConfig.SKYTRACK_API_URL,
-                    "Bearer $token",
-                    AttendanceRequest(action, token)
-                )
-                else -> api.attendanceToday(
-                    BuildConfig.SKYTRACK_API_URL,
-                    "Bearer $token",
-                    AttendanceRequest(action, token)
+                throw AttendanceApiException(
+                    code = "HTTP_${httpException.code()}",
+                    message = friendly
                 )
             }
 
             if (!response.success) {
+                val cleanMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.cleanErrorString(
+                    response.message ?: "Attendance request failed.",
+                    "Attendance request failed. Please try again."
+                )
                 throw AttendanceApiException(
                     code = response.error,
-                    message = response.message ?: "Attendance request failed."
+                    message = cleanMsg
                 )
             }
 

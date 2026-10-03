@@ -127,16 +127,29 @@ fun HomeScreen(
     // Dynamic live work duration counter
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(state.attendance?.login, state.breakSeconds, hasStarted, hasEnded) {
+    LaunchedEffect(state.attendance?.login, state.attendance?.logout, state.attendance?.workedMinutes, hasStarted, hasEnded) {
         if (hasStarted && !hasEnded) {
             val loginStr = state.attendance?.login
-            val startTime = parseLoginTime(loginStr)
+            val checkInInstant = parseInstant(loginStr)
             while (true) {
-                val now = LocalTime.now()
-                val diff = Duration.between(startTime, now).seconds
-                val totalElapsed = if (diff >= 0) diff else (if (diff >= -60) 0L else diff + 86400)
-                elapsedSeconds = maxOf(0L, totalElapsed - state.breakSeconds)
+                val now = java.time.Instant.now()
+                val diff = java.time.Duration.between(checkInInstant, now).seconds
+                val safeElapsedSeconds = maxOf(0L, diff)
+                elapsedSeconds = maxOf(0L, safeElapsedSeconds - state.breakSeconds)
                 delay(1000)
+            }
+        } else if (hasStarted && hasEnded) {
+            val workedMins = state.attendance?.workedMinutes
+            if (workedMins != null) {
+                elapsedSeconds = (workedMins * 60).toLong()
+            } else {
+                val loginStr = state.attendance?.login
+                val logoutStr = state.attendance?.logout
+                val checkInInstant = parseInstant(loginStr)
+                val checkOutInstant = parseInstant(logoutStr)
+                val diff = java.time.Duration.between(checkInInstant, checkOutInstant).seconds
+                val safeElapsedSeconds = maxOf(0L, diff)
+                elapsedSeconds = maxOf(0L, safeElapsedSeconds - state.breakSeconds)
             }
         } else {
             elapsedSeconds = 0L
@@ -832,12 +845,16 @@ fun AttendanceClockArea(
     val elapsedSeconds = remember(state.attendance, state.breakSeconds) {
         val loginStr = state.attendance?.login
         val logoutStr = state.attendance?.logout
+        val workedMins = state.attendance?.workedMinutes
         if (loginStr != null && logoutStr != null) {
-            val startTime = parseLoginTime(loginStr)
-            val endTime = parseLoginTime(logoutStr)
-            val diff = java.time.Duration.between(startTime, endTime).seconds
-            val totalElapsed = if (diff >= 0) diff else (if (diff >= -60) 0L else diff + 86400)
-            maxOf(0L, totalElapsed - state.breakSeconds)
+            if (workedMins != null) {
+                (workedMins * 60).toLong()
+            } else {
+                val startTime = parseInstant(loginStr)
+                val endTime = parseInstant(logoutStr)
+                val diff = java.time.Duration.between(startTime, endTime).seconds
+                maxOf(0L, maxOf(0L, diff) - state.breakSeconds)
+            }
         } else {
             0L
         }
@@ -1319,47 +1336,49 @@ fun DockedBottomNavigationBar(
     )
 }
 
-private fun parseLoginTime(loginStr: String?): LocalTime {
-    if (loginStr.isNullOrBlank()) return LocalTime.now()
-    val trimmed = loginStr.trim()
+private fun parseInstant(timeStr: String?): java.time.Instant {
+    if (timeStr.isNullOrBlank()) return java.time.Instant.now()
+    val trimmed = timeStr.trim()
     return try {
         when {
             trimmed.contains("T") || trimmed.endsWith("Z", ignoreCase = true) -> {
                 try {
-                    val instant = java.time.Instant.parse(trimmed)
-                    instant.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+                    java.time.Instant.parse(trimmed)
                 } catch (_: Exception) {
                     try {
-                        val odt = java.time.OffsetDateTime.parse(trimmed)
-                        odt.atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalTime()
+                        java.time.OffsetDateTime.parse(trimmed).toInstant()
                     } catch (_: Exception) {
-                        java.time.LocalDateTime.parse(trimmed).toLocalTime()
+                        java.time.LocalDateTime.parse(trimmed).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant()
                     }
                 }
             }
             trimmed.contains("AM", ignoreCase = true) || trimmed.contains("PM", ignoreCase = true) -> {
-                LocalTime.parse(trimmed, DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH))
+                val localTime = LocalTime.parse(trimmed, DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH))
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).atTime(localTime).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant()
             }
             trimmed.count { it == ':' } == 2 -> {
-                LocalTime.parse(trimmed, DateTimeFormatter.ofPattern("HH:mm:ss"))
+                val localTime = LocalTime.parse(trimmed, DateTimeFormatter.ofPattern("HH:mm:ss"))
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).atTime(localTime).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant()
             }
             trimmed.count { it == ':' } == 1 -> {
-                LocalTime.parse(trimmed, DateTimeFormatter.ofPattern("HH:mm"))
+                val localTime = LocalTime.parse(trimmed, DateTimeFormatter.ofPattern("HH:mm"))
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).atTime(localTime).atZone(java.time.ZoneId.of("Asia/Kolkata")).toInstant()
             }
             else -> {
-                LocalTime.now()
+                java.time.Instant.now()
             }
         }
     } catch (_: Exception) {
-        LocalTime.now()
+        java.time.Instant.now()
     }
 }
 
 private fun formatDisplayTime(timeStr: String?): String {
     if (timeStr.isNullOrBlank()) return "--:--"
     return try {
-        val time = parseLoginTime(timeStr)
-        time.format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH))
+        val instant = parseInstant(timeStr)
+        val indiaZone = java.time.ZoneId.of("Asia/Kolkata")
+        instant.atZone(indiaZone).format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH))
     } catch (_: Exception) {
         timeStr
     }

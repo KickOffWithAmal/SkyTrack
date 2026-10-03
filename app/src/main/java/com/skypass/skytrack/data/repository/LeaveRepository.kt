@@ -46,35 +46,37 @@ class LeaveRepository @Inject constructor(
 
             response.leave
         } catch (httpException: retrofit2.HttpException) {
-            val errorBody = httpException.response()?.errorBody()?.string()
-            if (!errorBody.isNullOrBlank()) {
-                try {
-                    val parsed = com.google.gson.JsonParser.parseString(errorBody).asJsonObject
-                    val errCode = parsed.get("error")?.asString
-                    val errMsg = parsed.get("message")?.asString
-                    throw LeaveApiException(errCode, errMsg ?: "Leave request failed.")
-                } catch (e: LeaveApiException) {
-                    throw e
-                } catch (_: Exception) {
-                    throw httpException
-                }
-            } else {
-                throw httpException
-            }
+            val userMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(
+                httpException,
+                "Leave request failed."
+            )
+            throw LeaveApiException(null, userMsg)
         }
     }
 
     suspend fun history(token: String): Result<List<LeaveDto>> = runCatching {
-        val response = api.leaveHistory(
-            BuildConfig.SKYTRACK_API_URL,
-            "Bearer $token",
-            LeaveHistoryRequest("leave_history")
-        )
+        val response = try {
+            api.leaveHistory(
+                BuildConfig.SKYTRACK_API_URL,
+                "Bearer $token",
+                LeaveHistoryRequest("leave_history")
+            )
+        } catch (httpException: retrofit2.HttpException) {
+            val userMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(
+                httpException,
+                "Unable to load leave history."
+            )
+            throw LeaveApiException(null, userMsg)
+        }
 
         if (!response.success) {
+            val cleanMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.cleanErrorString(
+                response.message ?: "Unable to load leave history.",
+                "Unable to load leave history."
+            )
             throw LeaveApiException(
                 response.error,
-                response.message ?: "Unable to load leave history."
+                cleanMsg
             )
         }
 
@@ -82,16 +84,28 @@ class LeaveRepository @Inject constructor(
     }
 
     suspend fun balance(token: String): Result<LeaveBalanceDataDto?> = runCatching {
-        val response = api.leaveBalance(
-            BuildConfig.SKYTRACK_API_URL,
-            "Bearer $token",
-            LeaveBalanceRequest("leave_balance")
-        )
+        val response = try {
+            api.leaveBalance(
+                BuildConfig.SKYTRACK_API_URL,
+                "Bearer $token",
+                LeaveBalanceRequest("leave_balance")
+            )
+        } catch (httpException: retrofit2.HttpException) {
+            val userMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(
+                httpException,
+                "Unable to load leave balance."
+            )
+            throw LeaveApiException(null, userMsg)
+        }
 
         if (!response.success) {
+            val cleanMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.cleanErrorString(
+                response.message ?: "Unable to load leave balance.",
+                "Unable to load leave balance."
+            )
             throw LeaveApiException(
                 response.error,
-                response.message ?: "Unable to load leave balance."
+                cleanMsg
             )
         }
 
@@ -99,16 +113,28 @@ class LeaveRepository @Inject constructor(
     }
 
     suspend fun publicHolidays(token: String): Result<List<PublicHoliday>> = runCatching {
-        val response = api.publicHolidays(
-            BuildConfig.SKYTRACK_API_URL,
-            "Bearer $token",
-            AttendanceRequest("public_holidays", token)
-        )
+        val response = try {
+            api.publicHolidays(
+                BuildConfig.SKYTRACK_API_URL,
+                "Bearer $token",
+                AttendanceRequest("public_holidays", token)
+            )
+        } catch (httpException: retrofit2.HttpException) {
+            val userMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(
+                httpException,
+                "Unable to load public holidays."
+            )
+            throw LeaveApiException(null, userMsg)
+        }
 
         if (!response.success) {
+            val cleanMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.cleanErrorString(
+                response.message ?: "Unable to load public holidays.",
+                "Unable to load public holidays."
+            )
             throw LeaveApiException(
                 response.error,
-                response.message ?: "Unable to load public holidays."
+                cleanMsg
             )
         }
 

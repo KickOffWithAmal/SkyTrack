@@ -136,7 +136,15 @@ object TimesheetPdfGenerator {
             val page = pdfDocument.startPage(pageInfo)
             val canvas = page.canvas
 
-            var cursorY = MARGIN_TOP
+            val letterheadResId = context.resources.getIdentifier("letterhead", "drawable", context.packageName)
+            if (letterheadResId != 0) {
+                val bitmap = android.graphics.BitmapFactory.decodeResource(context.resources, letterheadResId)
+                if (bitmap != null) {
+                    canvas.drawBitmap(bitmap, null, RectF(0f, 0f, PAGE_WIDTH.toFloat(), PAGE_HEIGHT.toFloat()), null)
+                }
+            }
+
+            var cursorY = if (letterheadResId != 0) 160f else MARGIN_TOP
 
             // Draw Header on first page (full header) or subsequent pages (compact header)
             if (pageNumber == 1) {
@@ -163,7 +171,8 @@ object TimesheetPdfGenerator {
                     absentDays = absentDaysCount,
                     leaveDays = leaveDaysCount,
                     totalActiveHours = totalActiveFormatted,
-                    totalBreakHours = totalBreakFormatted
+                    totalBreakHours = totalBreakFormatted,
+                    hasLetterhead = (letterheadResId != 0)
                 )
             } else {
                 cursorY = drawCompactHeader(
@@ -205,7 +214,8 @@ object TimesheetPdfGenerator {
                     isEven = isEven,
                     paintText = paintText,
                     paintFill = paintFill,
-                    paintStroke = paintStroke
+                    paintStroke = paintStroke,
+                    hasLetterhead = (letterheadResId != 0)
                 )
 
                 cursorY += rowHeight
@@ -224,7 +234,8 @@ object TimesheetPdfGenerator {
                     totalBreakFormatted = totalBreakFormatted,
                     paintText = paintText,
                     paintFill = paintFill,
-                    paintStroke = paintStroke
+                    paintStroke = paintStroke,
+                    hasLetterhead = (letterheadResId != 0)
                 )
 
                 // Signatures & Legal Verification
@@ -389,17 +400,20 @@ object TimesheetPdfGenerator {
         absentDays: Int,
         leaveDays: Int,
         totalActiveHours: String,
-        totalBreakHours: String
+        totalBreakHours: String,
+        hasLetterhead: Boolean = false
     ): Float {
         val y = startY
         val cardHeight = 58f
 
         // Outer Dossier Card Background
-        paintFill.color = COLOR_SLATE_50
-        canvas.drawRoundRect(
-            RectF(MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y + cardHeight),
-            8f, 8f, paintFill
-        )
+        if (!hasLetterhead) {
+            paintFill.color = COLOR_SLATE_50
+            canvas.drawRoundRect(
+                RectF(MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y + cardHeight),
+                8f, 8f, paintFill
+            )
+        }
 
         paintStroke.apply {
             color = COLOR_SLATE_200
@@ -414,6 +428,7 @@ object TimesheetPdfGenerator {
         val empName = session?.name ?: "Employee"
         val empId = session?.employeeId ?: "SK001"
         val role = session?.role?.replaceFirstChar { it.uppercase() } ?: "Operations Staff"
+        val dept = session?.departmentName?.ifBlank { "Operations" } ?: "Operations"
 
         paintText.apply {
             color = COLOR_SLATE_900
@@ -428,7 +443,7 @@ object TimesheetPdfGenerator {
             textSize = 8.5f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
-        canvas.drawText("ID: $empId   •   Role: $role", MARGIN_LEFT + 14f, y + 33f, paintText)
+        canvas.drawText("ID: $empId   •   Role: $role   •   Dept: $dept", MARGIN_LEFT + 14f, y + 33f, paintText)
         canvas.drawText("Period: $monthTitle", MARGIN_LEFT + 14f, y + 47f, paintText)
 
         // Divider in card
@@ -525,14 +540,17 @@ object TimesheetPdfGenerator {
         isEven: Boolean,
         paintText: Paint,
         paintFill: Paint,
-        paintStroke: Paint
+        paintStroke: Paint,
+        hasLetterhead: Boolean = false
     ) {
         // Alternating row background
-        paintFill.color = if (isEven) COLOR_SLATE_50 else Color.WHITE
-        canvas.drawRect(
-            RectF(MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y + rowHeight),
-            paintFill
-        )
+        if (!hasLetterhead) {
+            paintFill.color = if (isEven) COLOR_SLATE_50 else Color.WHITE
+            canvas.drawRect(
+                RectF(MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y + rowHeight),
+                paintFill
+            )
+        }
 
         // Subtle row bottom divider
         paintStroke.apply {
@@ -684,14 +702,17 @@ object TimesheetPdfGenerator {
         totalBreakFormatted: String,
         paintText: Paint,
         paintFill: Paint,
-        paintStroke: Paint
+        paintStroke: Paint,
+        hasLetterhead: Boolean = false
     ): Float {
         // Totals background
-        paintFill.color = COLOR_SLATE_100
-        canvas.drawRoundRect(
-            RectF(MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y + rowHeight),
-            3f, 3f, paintFill
-        )
+        if (!hasLetterhead) {
+            paintFill.color = COLOR_SLATE_100
+            canvas.drawRoundRect(
+                RectF(MARGIN_LEFT, y, PAGE_WIDTH - MARGIN_RIGHT, y + rowHeight),
+                3f, 3f, paintFill
+            )
+        }
 
         paintStroke.apply {
             color = COLOR_SLATE_300

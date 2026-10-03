@@ -1,23 +1,42 @@
 package com.skypass.skytrack.ui.login
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,35 +46,66 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.skypass.skytrack.R
+import com.skypass.skytrack.data.local.RememberedAccount
 
-val BrandColor = Color(0xFFF24E1E)
-val InputBgColor = Color(0xFFF4F5F7)
-val LabelDarkColor = Color(0xFF1E232A)
-val Slate400 = Color(0xFF94A3B8)
+val BrandRed = Color(0xFFC62828)
+val BrandRedDark = Color(0xFFB71C1C)
+val PageBgColor = Color(0xFFFAF9FD)
+
+val Slate900 = Color(0xFF0F172A)
 val Slate800 = Color(0xFF1E293B)
+val Slate700 = Color(0xFF334155)
+val Slate600 = Color(0xFF475569)
+val Slate500 = Color(0xFF64748B)
+val Slate400 = Color(0xFF94A3B8)
+val BorderColor = Color(0xFFE2E8F0)
 
 @Composable
 fun LoginScreen(
     state: LoginState,
-    onLogin: (String, String) -> Unit,
+    onLogin: (String, String, Boolean) -> Unit,
     onSuccess: () -> Unit,
-    onClearError: () -> Unit
+    onClearError: () -> Unit,
+    rememberedAccount: RememberedAccount? = null
 ) {
     var employeeId by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var rememberMe by rememberSaveable { mutableStateOf(false) }
+    var showForgotPasswordDialog by rememberSaveable { mutableStateOf(false) }
+    var hasLoadedRemembered by rememberSaveable { mutableStateOf(false) }
+
     val loading = state is LoginState.Loading
+
+    LaunchedEffect(rememberedAccount) {
+        if (!hasLoadedRemembered && rememberedAccount != null) {
+            if (rememberedAccount.rememberMe) {
+                employeeId = rememberedAccount.employeeId
+                password = rememberedAccount.password
+                rememberMe = true
+            }
+            hasLoadedRemembered = true
+        }
+    }
 
     LaunchedEffect(state) {
         if (state is LoginState.Success) {
@@ -63,101 +113,241 @@ fun LoginScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(PageBgColor)
     ) {
-        // Header
         Column(
             modifier = Modifier
-                .padding(top = 48.dp, bottom = 32.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "SKYTRACK",
-                color = BrandColor,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 4.sp
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "Login",
-                color = LabelDarkColor,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.5).sp
-            )
-        }
-
-        // Form
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
-            CustomTextField(
-                label = "Employee ID",
-                value = employeeId,
-                onValueChange = {
-                    employeeId = it.uppercase()
-                    onClearError()
-                },
-                placeholder = "e.g. SK001",
-                enabled = !loading
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            CustomTextField(
-                label = "Password",
-                value = password,
-                onValueChange = {
-                    password = it
-                    onClearError()
-                },
-                placeholder = "Enter password",
-                isPassword = true,
-                enabled = !loading
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            if (state is LoginState.Error) {
-                Text(
-                    text = state.message,
-                    color = Color.Red,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-            }
-
-            Button(
-                onClick = { onLogin(employeeId, password) },
+            // Top Section: Header & Card
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = CircleShape,
-                        spotColor = BrandColor.copy(alpha = 0.5f)
-                    ),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = BrandColor,
-                    disabledContainerColor = BrandColor.copy(alpha = 0.5f)
-                ),
-                enabled = !loading
+                    .widthIn(max = 380.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Brand Header
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 44.dp, bottom = 28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.skytrack_logo),
+                        contentDescription = "SkyTrack Logo",
+                        modifier = Modifier.size(96.dp),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Welcome back",
+                        color = Slate900,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Access your operational shift & flight logs",
+                        color = Slate500,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                // Login Form Card
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = RoundedCornerShape(24.dp),
+                            spotColor = Color(0xFF64748B).copy(alpha = 0.15f)
+                        )
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.White.copy(alpha = 0.95f))
+                        .border(
+                            BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                            RoundedCornerShape(24.dp)
+                        )
+                        .padding(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Employee ID Input
+                        EnterpriseInputField(
+                            label = "EMPLOYEE ID",
+                            value = employeeId,
+                            onValueChange = {
+                                employeeId = it.uppercase()
+                                onClearError()
+                            },
+                            placeholder = "e.g. SK001",
+                            leadingIcon = Icons.Rounded.Badge,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Characters,
+                                keyboardType = KeyboardType.Text
+                            ),
+                            enabled = !loading
+                        )
+
+                        // Password Input
+                        EnterpriseInputField(
+                            label = "PASSWORD",
+                            value = password,
+                            onValueChange = {
+                                password = it
+                                onClearError()
+                            },
+                            placeholder = "Enter password",
+                            leadingIcon = Icons.Rounded.Lock,
+                            isPassword = true,
+                            passwordVisible = passwordVisible,
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = { passwordVisible = !passwordVisible },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                        tint = Slate400,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.None,
+                                keyboardType = KeyboardType.Password
+                            ),
+                            enabled = !loading
+                        )
+
+                        // Remember Me & Forgot Password Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { rememberMe = !rememberMe }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Checkbox(
+                                    checked = rememberMe,
+                                    onCheckedChange = { rememberMe = it },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = BrandRed,
+                                        uncheckedColor = Color(0xFFCBD5E1),
+                                        checkmarkColor = Color.White
+                                    ),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Remember me",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Slate600
+                                )
+                            }
+
+                            Text(
+                                text = "Forgot Password?",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = BrandRed,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { showForgotPasswordDialog = true }
+                                    .padding(vertical = 4.dp, horizontal = 4.dp)
+                            )
+                        }
+
+                        // Submit Button
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                                .height(52.dp)
+                                .shadow(
+                                    elevation = 8.dp,
+                                    shape = RoundedCornerShape(16.dp),
+                                    spotColor = BrandRedDark.copy(alpha = 0.35f)
+                                )
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = if (loading) listOf(
+                                            BrandRed.copy(alpha = 0.6f),
+                                            BrandRedDark.copy(alpha = 0.6f)
+                                        ) else listOf(
+                                            BrandRed,
+                                            BrandRedDark
+                                        )
+                                    )
+                                )
+                                .clickable(enabled = !loading) {
+                                    onLogin(employeeId, password, rememberMe)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "Sign In",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Enterprise Footer
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 28.dp, bottom = 24.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Login",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
+                    text = "VERSION 1.0.0",
+                    color = Slate400,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.sp
                 )
             }
         }
@@ -165,25 +355,82 @@ fun LoginScreen(
         // SkyTrack Global Loading Dialog
         com.skypass.skytrack.ui.components.SkyTrackLoadingOverlay(visible = loading)
 
-        // Footer
-        Text(
-            text = "SECURED BY SKYTRACK",
-            color = Slate400,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Normal,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
+        // Error Dialog
+        if (state is LoginState.Error) {
+            AlertDialog(
+                onDismissRequest = onClearError,
+                title = {
+                    Text(
+                        text = "SkyTrack",
+                        fontWeight = FontWeight.Bold,
+                        color = Slate900
+                    )
+                },
+                text = {
+                    Text(
+                        text = state.message,
+                        color = Slate800,
+                        fontSize = 15.sp
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = onClearError,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("OK", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = Color.White
+            )
+        }
+
+        // Forgot Password Dialog
+        if (showForgotPasswordDialog) {
+            AlertDialog(
+                onDismissRequest = { showForgotPasswordDialog = false },
+                title = {
+                    Text(
+                        text = "Reset Password",
+                        fontWeight = FontWeight.Bold,
+                        color = Slate900
+                    )
+                },
+                text = {
+                    Text(
+                        text = "For security reasons, please contact your SkyTrack administrator or HR department to reset your credentials.",
+                        color = Slate700,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = { showForgotPasswordDialog = false }
+                    ) {
+                        Text("Close", color = BrandRed, fontWeight = FontWeight.Bold)
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = Color.White
+            )
+        }
     }
 }
 
 @Composable
-fun CustomTextField(
+private fun EnterpriseInputField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
+    leadingIcon: ImageVector,
+    trailingIcon: @Composable (() -> Unit)? = null,
     isPassword: Boolean = false,
+    passwordVisible: Boolean = false,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     enabled: Boolean = true
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -191,53 +438,87 @@ fun CustomTextField(
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
-            color = Slate800,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            color = Slate700,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.8.sp,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
         )
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .background(InputBgColor, RoundedCornerShape(16.dp))
+                .height(52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White)
                 .border(
-                    width = if (isFocused) 2.dp else 0.dp,
-                    color = if (isFocused) BrandColor.copy(alpha = 0.2f) else Color.Transparent,
-                    shape = RoundedCornerShape(16.dp)
+                    BorderStroke(
+                        width = if (isFocused) 1.5.dp else 1.dp,
+                        color = if (isFocused) BrandRed else BorderColor
+                    ),
+                    RoundedCornerShape(16.dp)
                 )
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            if (value.isEmpty() && !isFocused) {
-                Text(
-                    text = placeholder,
-                    color = Slate400,
-                    fontSize = 15.sp
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Leading Icon
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = null,
+                    tint = if (isFocused) BrandRed else Slate400,
+                    modifier = Modifier.size(20.dp)
                 )
-            }
 
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { isFocused = it.isFocused },
-                textStyle = TextStyle(
-                    color = Slate800,
-                    fontSize = if (isPassword) 18.sp else 15.sp,
-                    letterSpacing = if (isPassword) 4.sp else 0.sp
-                ),
-                singleLine = true,
-                visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = if (!isPassword) KeyboardCapitalization.Characters else KeyboardCapitalization.None,
-                    keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text
-                ),
-                cursorBrush = SolidColor(BrandColor),
-                enabled = enabled
-            )
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Input Field + Placeholder
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (value.isEmpty() && !isFocused) {
+                        Text(
+                            text = placeholder,
+                            color = Slate400,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+
+                    BasicTextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { isFocused = it.isFocused },
+                        textStyle = TextStyle(
+                            color = Slate800,
+                            fontSize = if (isPassword && !passwordVisible) 18.sp else 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = if (isPassword && !passwordVisible) 3.sp else 0.sp
+                        ),
+                        singleLine = true,
+                        visualTransformation = if (isPassword && !passwordVisible) {
+                            PasswordVisualTransformation()
+                        } else {
+                            VisualTransformation.None
+                        },
+                        keyboardOptions = keyboardOptions,
+                        cursorBrush = SolidColor(BrandRed),
+                        enabled = enabled
+                    )
+                }
+
+                // Trailing Icon (e.g. Password toggle)
+                if (trailingIcon != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    trailingIcon()
+                }
+            }
         }
     }
 }

@@ -125,10 +125,10 @@ fun MonthlyStatisticsScreen(
     var pdfFileToShow by remember { mutableStateOf<File?>(null) }
     var isExportingPdf by remember { mutableStateOf(false) }
 
-    val monthTitle = remember(state.summary?.month) {
-        val raw = state.summary?.month
-        if (raw.isNullOrBlank()) {
-            "February 2026"
+    val monthTitle = remember(state.summary?.month, state.selectedMonthRaw) {
+        val raw = state.summary?.month ?: state.selectedMonthRaw
+        if (raw.isBlank()) {
+            YearMonth.now().format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH))
         } else {
             try {
                 if (raw.length == 7) {
@@ -157,6 +157,7 @@ fun MonthlyStatisticsScreen(
             // Header with Month Switcher Controls
             MonthlyTopHeader(
                 summary = state.summary,
+                selectedMonthRaw = state.selectedMonthRaw,
                 onPreviousMonth = viewModel::loadPreviousMonth,
                 onNextMonth = viewModel::loadNextMonth
             )
@@ -262,13 +263,14 @@ fun MonthlyStatisticsScreen(
 @Composable
 private fun MonthlyTopHeader(
     summary: MonthlyAttendanceSummary?,
+    selectedMonthRaw: String,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit
 ) {
-    val monthTitle = remember(summary?.month) {
-        val raw = summary?.month
-        if (raw.isNullOrBlank()) {
-            "February 2026"
+    val monthTitle = remember(summary?.month, selectedMonthRaw) {
+        val raw = summary?.month ?: selectedMonthRaw
+        if (raw.isBlank()) {
+            YearMonth.now().format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH))
         } else {
             try {
                 if (raw.length == 7) {
@@ -341,12 +343,12 @@ private fun MonthlyTopHeader(
                 )
 
                 val displayTargetHours = summary?.targetHoursFormatted ?: "${targetHours}h"
-                Text(
-                    text = "$workingDays Working Days • $displayTargetHours Target",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Slate500
-                )
+//                Text(
+//                    text = "$workingDays Working Days • $displayTargetHours Target",
+//                    fontSize = 11.sp,
+//                    fontWeight = FontWeight.Medium,
+//                    color = Slate500
+//                )
             }
         }
 

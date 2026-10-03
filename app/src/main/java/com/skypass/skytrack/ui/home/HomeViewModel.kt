@@ -68,7 +68,7 @@ class HomeViewModel @Inject constructor(
                     if (isOnBreak) {
                         try {
                             val breakStartInstant = java.time.Instant.parse(resolvedAttendance!!.breakStartedAt)
-                            extraBreakSeconds = java.time.Duration.between(breakStartInstant, java.time.Instant.now()).seconds
+                            extraBreakSeconds = maxOf(0L, java.time.Duration.between(breakStartInstant, java.time.Instant.now()).seconds)
                         } catch (e: Exception) {
                             // ignore parsing error
                         }
@@ -78,7 +78,7 @@ class HomeViewModel @Inject constructor(
                         attendance = resolvedAttendance,
                         isLoading = false,
                         isOnBreak = isOnBreak,
-                        breakSeconds = if (resolvedAttendance != null) baseBreakSeconds + extraBreakSeconds else 0L
+                        breakSeconds = if (resolvedAttendance != null) maxOf(0L, baseBreakSeconds + extraBreakSeconds) else 0L
                     )
                     
                     if (isOnBreak) {
@@ -94,7 +94,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun startWork(session: Session) {
-        val nowTime = LocalTime.now().format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH))
+        val nowTime = java.time.Instant.now().toString()
         val current = AttendanceDto(
             date = LocalDate.now().toString(),
             employeeId = session.employeeId,
@@ -127,7 +127,7 @@ class HomeViewModel @Inject constructor(
             )
             return
         }
-        val nowTime = LocalTime.now().format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH))
+        val nowTime = java.time.Instant.now().toString()
         val current = _state.value.attendance ?: AttendanceDto(
             date = LocalDate.now().toString(),
             employeeId = session.employeeId,
@@ -164,7 +164,7 @@ class HomeViewModel @Inject constructor(
             val result = if (nextBreak) {
                 attendanceRepository.startBreak(session.token)
             } else {
-                attendanceRepository.endBreak(session.token)
+                attendanceRepository.resumeWork(session.token)
             }
 
             result.onSuccess { attendance ->
@@ -202,7 +202,7 @@ class HomeViewModel @Inject constructor(
                 .onSuccess { attendance ->
                     val stableLogin = attendance?.login?.takeIf { it.isNotBlank() }
                         ?: _state.value.attendance?.login?.takeIf { it.isNotBlank() }
-                        ?: LocalTime.now().format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH))
+                        ?: java.time.Instant.now().toString()
 
                     val mergedAttendance = (attendance ?: _state.value.attendance ?: AttendanceDto()).copy(
                         login = if (isStart) stableLogin else (attendance?.login ?: _state.value.attendance?.login)
@@ -229,7 +229,7 @@ class HomeViewModel @Inject constructor(
                             if (isOnBreak) {
                                 try {
                                     val breakStartInstant = java.time.Instant.parse(finalAttendance.breakStartedAt)
-                                    extraBreakSeconds = java.time.Duration.between(breakStartInstant, java.time.Instant.now()).seconds
+                                    extraBreakSeconds = maxOf(0L, java.time.Duration.between(breakStartInstant, java.time.Instant.now()).seconds)
                                 } catch (e: Exception) {
                                 }
                             }
@@ -240,7 +240,7 @@ class HomeViewModel @Inject constructor(
                                 isStartingWork = false,
                                 isEndingWork = false,
                                 isOnBreak = isOnBreak,
-                                breakSeconds = baseBreakSeconds + extraBreakSeconds
+                                breakSeconds = maxOf(0L, baseBreakSeconds + extraBreakSeconds)
                             )
                             if (isOnBreak) {
                                 startBreakTimer()
@@ -261,7 +261,7 @@ class HomeViewModel @Inject constructor(
                     if (isStart && apiError?.code?.uppercase() == "ALREADY_STARTED") {
                         // Work was already started! Keep state stably in State 2
                         val stableLogin = _state.value.attendance?.login?.takeIf { it.isNotBlank() }
-                            ?: LocalTime.now().format(DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH))
+                            ?: java.time.Instant.now().toString()
                         _state.value = _state.value.copy(
                             attendance = (_state.value.attendance ?: AttendanceDto()).copy(login = stableLogin),
                             isActionLoading = false,
@@ -313,12 +313,9 @@ class HomeViewModel @Inject constructor(
             "ALREADY_ON_BREAK" -> "Cannot start another break while already on a break."
             "NO_ACTIVE_BREAK" -> "Cannot end a break when no break is active."
             "ACTIVE_BREAK" -> "Cannot end work while a break is still active. Please end your break first."
-            "INVALID_REQUEST" -> apiError.message
-            else -> when (error) {
-                is UnknownHostException, is ConnectException ->
-                    "Unable to connect to SkyTrack server. Check your internet connection."
-                else -> apiError?.message ?: error.message ?: "Attendance request failed."
-            }
+            "INVALID_REQUEST" -> com.skypass.skytrack.data.remote.ApiErrorExtractor.cleanErrorString(apiError.message, "Invalid attendance request.")
+            else -> apiError?.message?.let { com.skypass.skytrack.data.remote.ApiErrorExtractor.cleanErrorString(it, "Attendance request failed.") }
+                ?: com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(error, "Attendance request failed.")
         }
 
         _state.value = _state.value.copy(

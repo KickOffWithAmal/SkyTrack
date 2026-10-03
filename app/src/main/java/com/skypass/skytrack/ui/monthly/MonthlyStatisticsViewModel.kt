@@ -22,7 +22,8 @@ data class MonthlyStatisticsUiState(
     val attendance: List<MonthlyAttendanceDto> = emptyList(),
     val error: String? = null,
     val totalActiveHoursStr: String = "0h 00m",
-    val actualHoursNeededStr: String = "0h"
+    val actualHoursNeededStr: String = "0h",
+    val selectedMonthRaw: String = java.time.LocalDate.now().toString().substring(0, 7)
 )
 
 @HiltViewModel
@@ -67,7 +68,7 @@ class MonthlyStatisticsViewModel @Inject constructor(
         val month = selectedMonth.toString().substring(0, 7)
 
         viewModelScope.launch {
-            _uiState.value = MonthlyStatisticsUiState(isLoading = true)
+            _uiState.value = MonthlyStatisticsUiState(isLoading = true, selectedMonthRaw = month)
             android.util.Log.d("MonthlyStats", "Fetching attendance for month: $month")
 
             repository
@@ -86,7 +87,8 @@ class MonthlyStatisticsViewModel @Inject constructor(
                         summary = summary,
                         attendance = attendance,
                         totalActiveHoursStr = totalActiveHoursStr,
-                        actualHoursNeededStr = actualHoursNeededStr
+                        actualHoursNeededStr = actualHoursNeededStr,
+                        selectedMonthRaw = month
                     )
                 }
                 .onFailure { error ->
@@ -102,7 +104,8 @@ class MonthlyStatisticsViewModel @Inject constructor(
 
                     _uiState.value = MonthlyStatisticsUiState(
                         isLoading = false,
-                        error = error.message ?: "Unable to load attendance."
+                        error = error.message ?: "Unable to load attendance.",
+                        selectedMonthRaw = month
                     )
                 }
         }

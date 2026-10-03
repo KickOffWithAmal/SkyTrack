@@ -8,6 +8,8 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.collectAsState
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -94,6 +96,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 
 // Palette matching Tailwind Stitch Configuration
 private val BgSurface = Color(0xFFFAF9FD)
@@ -134,9 +137,16 @@ fun ProfileScreen(
     onNavigateHome: () -> Unit,
     onNavigateLeaves: () -> Unit,
     onNavigateStatistics: () -> Unit,
-    onChangePasswordClick: () -> Unit = {}
+    onChangePasswordClick: () -> Unit = {},
+    viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val profileUiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(session.token) {
+        viewModel.loadProfileData(session)
+    }
+
     var punchInAlertsEnabled by remember { mutableStateOf(true) }
 
     // Avatar state management
@@ -235,9 +245,9 @@ fun ProfileScreen(
 
             // Circular Profile Hero Section
             ProfileHeroSection(
-                name = session.name.ifBlank { "Amal Ramachandran" },
-                employeeId = session.employeeId.ifBlank { "SK001" },
-                role = session.role.ifBlank { "Visa Operations Specialist" },
+                name = session.name.ifBlank { "" },
+                employeeId = session.employeeId.ifBlank { "" },
+                role = session.role.ifBlank { "" },
                 avatarBitmap = effectiveAvatarBitmap,
                 onEditPhotoClick = {
                     showPhotoSourceSheet = true
@@ -247,12 +257,20 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Trio Metric Cards (Attendance, Leave Quota, YTD Overtime)
-            TrioMetricsSection()
+            TrioMetricsSection(
+                attendancePercent = profileUiState.attendancePercent,
+                leaveQuota = profileUiState.leaveQuota,
+                overtimeWork = profileUiState.overtimeWork
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
             // Employment Details Card
-            EmploymentDetailsCard(session = session)
+            EmploymentDetailsCard(
+                reportingManager = profileUiState.reportingManager,
+                department = profileUiState.department,
+                workShift = profileUiState.workShift
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -754,23 +772,23 @@ private fun ProfileHeroSection(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = role,
+                text = role.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = Slate500
             )
-            Box(
-                modifier = Modifier
-                    .size(4.dp)
-                    .clip(CircleShape)
-                    .background(Slate300)
-            )
-            Text(
-                text = "Skypass Dubai HQ",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Slate600
-            )
+//            Box(
+//                modifier = Modifier
+//                    .size(4.dp)
+//                    .clip(CircleShape)
+//                    .background(Slate300)
+//            )
+//            Text(
+//                text = "Skypass Dubai HQ",
+//                fontSize = 12.sp,
+//                fontWeight = FontWeight.SemiBold,
+//                color = Slate600
+//            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -805,7 +823,11 @@ private fun ProfileHeroSection(
 // TRIO METRIC CARDS
 // -------------------------------------------------------------
 @Composable
-private fun TrioMetricsSection() {
+private fun TrioMetricsSection(
+    attendancePercent: String,
+    leaveQuota: String,
+    overtimeWork: String
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -816,7 +838,7 @@ private fun TrioMetricsSection() {
             icon = Icons.Rounded.Check,
             iconTint = Emerald600,
             iconBg = Emerald50,
-            value = "96.4%",
+            value = attendancePercent,
             label = "Attendance"
         )
 
@@ -826,7 +848,7 @@ private fun TrioMetricsSection() {
             icon = Icons.Rounded.CalendarMonth,
             iconTint = BrandCrimson,
             iconBg = RedBg50,
-            value = "11 Days",
+            value = leaveQuota,
             label = "Leave Quota"
         )
 
@@ -836,7 +858,7 @@ private fun TrioMetricsSection() {
             icon = Icons.Rounded.Schedule,
             iconTint = Purple600,
             iconBg = Purple50,
-            value = "+14h 30m",
+            value = overtimeWork,
             label = "YTD Overtime"
         )
     }
@@ -928,7 +950,11 @@ private fun MetricItemCard(
 // EMPLOYMENT DETAILS CARD
 // -------------------------------------------------------------
 @Composable
-private fun EmploymentDetailsCard(session: Session) {
+private fun EmploymentDetailsCard(
+    reportingManager: String,
+    department: String,
+    workShift: String
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -961,7 +987,7 @@ private fun EmploymentDetailsCard(session: Session) {
             DetailRowItem(
                 icon = Icons.Rounded.Person,
                 label = "Reporting Manager",
-                value = "Dinesh Pillai (VP Ops)"
+                value = reportingManager
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -970,7 +996,7 @@ private fun EmploymentDetailsCard(session: Session) {
             DetailRowItem(
                 icon = Icons.Rounded.Apartment,
                 label = "Department / Unit",
-                value = "Schengen & UK Operations"
+                value = department
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -979,7 +1005,7 @@ private fun EmploymentDetailsCard(session: Session) {
             DetailRowItem(
                 icon = Icons.Rounded.Schedule,
                 label = "Work Shift",
-                value = "General (09:00 AM - 06:00 PM)"
+                value = workShift
             )
         }
     }

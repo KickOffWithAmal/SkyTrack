@@ -246,7 +246,7 @@ fun LeaveScreen(
             session = session,
             from = finalFrom,
             to = finalTo,
-            type = leaveType,
+            type = if (isHalfDay) "$leaveType (Half Day)" else leaveType,
             reason = finalReason
         )
     }
@@ -434,7 +434,7 @@ fun LeaveScreen(
                     )
 
                     // Approver Handover Note
-                    ApproverHandoverCard()
+                    ApproverHandoverCard(managerName = session.managerName)
                 }
             }
 
@@ -1642,7 +1642,11 @@ private fun LeaveReasonInput(
 // APPROVER HANDOVER NOTE
 // -------------------------------------------------------------
 @Composable
-private fun ApproverHandoverCard() {
+private fun ApproverHandoverCard(managerName: String) {
+    val cleanManagerName = managerName
+        .takeIf { it.isNotBlank() && !it.contains("Dinesh Pillai", ignoreCase = true) }
+        ?.trim()
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -1673,7 +1677,7 @@ private fun ApproverHandoverCard() {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Reporting Manager: Dinesh Pillai",
+                    text = if (!cleanManagerName.isNullOrBlank()) "Reporting Manager: $cleanManagerName" else "Reporting Manager: Not Assigned",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Slate800,
@@ -1681,7 +1685,7 @@ private fun ApproverHandoverCard() {
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Request routed automatically to Dubai HQ Desk",
+                    text = if (!cleanManagerName.isNullOrBlank()) "Request will be routed to $cleanManagerName for approval" else "Request will be routed to Admin & HR Desk",
                     fontSize = 11.sp,
                     color = Slate400,
                     maxLines = 1,

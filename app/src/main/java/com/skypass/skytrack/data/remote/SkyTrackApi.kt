@@ -35,13 +35,6 @@ interface SkyTrackApi {
     ): AttendanceResponse
 
     @POST
-    suspend fun endBreak(
-        @Url endpoint: String,
-        @Header("Authorization") authorization: String,
-        @Body request: AttendanceRequest
-    ): AttendanceResponse
-
-    @POST
     suspend fun resumeWork(
         @Url endpoint: String,
         @Header("Authorization") authorization: String,

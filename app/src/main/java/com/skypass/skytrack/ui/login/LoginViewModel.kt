@@ -2,12 +2,15 @@ package com.skypass.skytrack.ui.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.skypass.skytrack.data.local.RememberedAccount
 import com.skypass.skytrack.data.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed interface LoginState {
@@ -25,7 +28,14 @@ class LoginViewModel @Inject constructor(
     private val _state = MutableStateFlow<LoginState>(LoginState.Idle)
     val state: StateFlow<LoginState> = _state.asStateFlow()
 
-    fun login(employeeId: String, password: String) {
+    val rememberedAccount: StateFlow<RememberedAccount> = repository.rememberedAccount
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = RememberedAccount()
+        )
+
+    fun login(employeeId: String, password: String, rememberMe: Boolean = false) {
         if (employeeId.isBlank() || password.isBlank()) {
             _state.value = LoginState.Error(
                 "Employee ID and password are required."
@@ -36,7 +46,7 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = LoginState.Loading
 
-            repository.login(employeeId, password)
+            repository.login(employeeId, password, rememberMe)
                 .onSuccess {
                     _state.value = LoginState.Success
                 }
@@ -53,12 +63,8 @@ class LoginViewModel @Inject constructor(
     }
 
     private fun messageFor(error: Throwable): String =
-        when (error) {
-            is java.net.UnknownHostException,
-            is java.net.ConnectException ->
-                "Unable to connect to SkyTrack server. Check your internet connection."
-
-            else ->
-                error.message ?: "Sign in failed. Please try again."
-        }
+        com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(
+            error,
+            "Sign in failed. Please check your credentials and try again."
+        )
 }

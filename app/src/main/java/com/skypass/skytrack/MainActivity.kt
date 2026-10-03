@@ -25,6 +25,7 @@ import com.skypass.skytrack.ui.monthly.MonthlyStatisticsScreen
 import com.skypass.skytrack.ui.monthly.MonthlyStatisticsViewModel
 import com.skypass.skytrack.ui.profile.ChangePasswordScreen
 import com.skypass.skytrack.ui.profile.ProfileScreen
+import com.skypass.skytrack.ui.profile.ProfileViewModel
 import com.skypass.skytrack.ui.splash.SplashScreen
 import com.skypass.skytrack.ui.theme.SkyTrackTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private val homeViewModel: HomeViewModel by viewModels()
     private val leaveViewModel: LeaveViewModel by viewModels()
     private val monthlyStatisticsViewModel: MonthlyStatisticsViewModel by viewModels()
+    private val profileViewModel: ProfileViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,11 +89,14 @@ class MainActivity : ComponentActivity() {
                             showProfile = false
                             showChangePassword = false
 
+                            val rememberedAccount by loginViewModel.rememberedAccount.collectAsState()
+
                             LoginScreen(
                                 state = loginViewModel.state.collectAsState().value,
                                 onLogin = loginViewModel::login,
                                 onSuccess = {},
-                                onClearError = loginViewModel::clearError
+                                onClearError = loginViewModel::clearError,
+                                rememberedAccount = rememberedAccount
                             )
                         }
 
@@ -125,6 +130,7 @@ class MainActivity : ComponentActivity() {
                         showProfile -> {
                             ProfileScreen(
                                 session = session!!,
+                                viewModel = profileViewModel,
                                 onLogout = {
                                     lifecycleScope.launch {
                                         authRepository.logout()

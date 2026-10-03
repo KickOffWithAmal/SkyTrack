@@ -28,29 +28,48 @@ class MonthlyStatisticsRepository @Inject constructor(
                 )
             }
 
-            val response = api.attendanceMonthly(
-                endpoint = BuildConfig.SKYTRACK_API_URL,
-                authorization = "Bearer ${session.token}",
-                request = MonthlyAttendanceRequest(
-                    token = session.token,
-                    month = month
+            val response = try {
+                api.attendanceMonthly(
+                    endpoint = BuildConfig.SKYTRACK_API_URL,
+                    authorization = "Bearer ${session.token}",
+                    request = MonthlyAttendanceRequest(
+                        token = session.token,
+                        month = month
+                    )
                 )
-            )
+            } catch (httpException: retrofit2.HttpException) {
+                val friendly = com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(
+                    httpException,
+                    "Unable to load monthly attendance."
+                )
+                return Result.failure(
+                    MonthlyApiException(
+                        code = "HTTP_${httpException.code()}",
+                        message = friendly
+                    )
+                )
+            }
 
             if (response.success) {
                 Result.success(response)
             } else {
+                val cleanMsg = com.skypass.skytrack.data.remote.ApiErrorExtractor.cleanErrorString(
+                    response.message ?: response.error ?: "Unable to load monthly attendance.",
+                    "Unable to load monthly attendance."
+                )
                 Result.failure(
                     MonthlyApiException(
                         code = response.error,
-                        message = response.message
-                            ?: response.error
-                            ?: "Unable to load monthly attendance."
+                        message = cleanMsg
                     )
                 )
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            val friendly = com.skypass.skytrack.data.remote.ApiErrorExtractor.getMessage(
+                e,
+                "Unable to load monthly attendance."
+            )
+            Result.failure(MonthlyApiException(code = "ERROR", message = friendly))
         }
     }
 }
