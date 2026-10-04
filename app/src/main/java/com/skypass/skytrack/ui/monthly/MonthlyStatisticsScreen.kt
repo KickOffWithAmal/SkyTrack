@@ -450,7 +450,8 @@ private fun MonthlyUserGreeting(
 // -------------------------------------------------------------
 @Composable
 private fun CentralCircularDial(summary: MonthlyAttendanceSummary?, uiState: MonthlyStatisticsUiState) {
-    val totalHoursStr = uiState.totalActiveHoursStr.ifBlank { "0h 00m" }
+    val rawTotal = uiState.totalActiveHoursStr.trim()
+    val totalHoursStr = if (rawTotal.isBlank() || rawTotal == "00:00") "0h 00m" else rawTotal
     val targetHoursStr = uiState.actualHoursNeededStr.ifBlank { "${(summary?.workingDays ?: 20) * 8}h" }
 
     // Parse logged hours to calculate percentage

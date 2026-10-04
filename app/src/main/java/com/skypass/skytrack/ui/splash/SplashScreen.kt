@@ -1,6 +1,7 @@
 package com.skypass.skytrack.ui.splash
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -19,6 +20,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -34,7 +37,7 @@ val ShortStackFontFamily = FontFamily(
 @Composable
 fun SplashScreen(onFinished: () -> Unit = {}) {
     val progress = remember { Animatable(0f) }
-    
+
     LaunchedEffect(Unit) {
         progress.animateTo(
             targetValue = 0.92f,
@@ -92,82 +95,15 @@ fun SplashScreen(onFinished: () -> Unit = {}) {
                 modifier = Modifier.offset(y = (-32).dp), // -mt-8
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Distinctive App Icon Mark
-                Box(
-                    modifier = Modifier.padding(bottom = 24.dp), // mb-6
-                    contentAlignment = Alignment.Center
-                ) {
-                    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                    val pulseScale by infiniteTransition.animateFloat(
-                        initialValue = 1f,
-                        targetValue = 1.25f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1500, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Restart
-                        ), label = "pulse"
-                    )
-                    val pulseAlpha by infiniteTransition.animateFloat(
-                        initialValue = 0.25f,
-                        targetValue = 0f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1500, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Restart
-                        ), label = "pulseAlpha"
-                    )
-
-                    // Pulsing Satellite Ring
-                    Box(
-                        modifier = Modifier
-                            .size(96.dp) // slightly larger than inner 80.dp + inset
-                            .scale(pulseScale)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(Color(0xFFFFDAD6).copy(alpha = pulseAlpha)) // primary-fixed/25
-                    )
-
-                    // Main Icon Container
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp) // w-20 h-20
-                            .shadow(elevation = 2.dp, shape = RoundedCornerShape(16.dp)) // shadow-sm
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFFF4F3F7)) // surface-container-low
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.linearGradient(
-                                        colors = listOf(
-                                            Color(0xFFFFDAD6).copy(alpha = 0.2f), // primary-fixed/20
-                                            Color.Transparent,
-                                            Color(0xFFA20513).copy(alpha = 0.05f) // primary/5
-                                        )
-                                    )
-                                )
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(48.dp) // w-12 h-12
-                                .shadow(
-                                    elevation = 6.dp,
-                                    shape = RoundedCornerShape(12.dp),
-                                    spotColor = Color(0xFFA20513).copy(alpha = 0.2f) // primary/20
-                                )
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFC62828)), // primary-container
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.NearMe,
-                                contentDescription = "Logo",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-                }
+                // Distinctive App Logo Mark
+                Image(
+                    painter = painterResource(id = R.drawable.skytrack_logo),
+                    contentDescription = "SkyTrack Logo",
+                    modifier = Modifier
+                        .size(110.dp)
+                        .padding(bottom = 20.dp),
+                    contentScale = ContentScale.Fit
+                )
 
                 // SkyTrack Title
                 Text(
@@ -270,7 +206,7 @@ fun SplashScreen(onFinished: () -> Unit = {}) {
                         )
                     }
                 }
-                
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp) // gap-1

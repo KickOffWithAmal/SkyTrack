@@ -21,7 +21,9 @@ import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LocalCafe
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Person
+import com.skypass.skytrack.ui.components.ComingSoonDialog
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -105,6 +107,7 @@ fun HomeScreen(
     onOpenProfile: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
+    var showComingSoonDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(session.token) {
         viewModel.loadToday(session)
@@ -169,7 +172,9 @@ fun HomeScreen(
                 .padding(bottom = 100.dp) // Space for docked nav
         ) {
             // Top Header: Calendar Title & Horizontal Date Strip
-            DashboardHeader()
+            DashboardHeader(
+                onNotificationClick = { showComingSoonDialog = true }
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -256,6 +261,14 @@ fun HomeScreen(
         com.skypass.skytrack.ui.components.SkyTrackLoadingOverlay(
             visible = state.isLoading || state.isActionLoading || state.isStartingWork || state.isEndingWork
         )
+
+        if (showComingSoonDialog) {
+            ComingSoonDialog(
+                title = "Notifications",
+                message = "This feature is coming soon.",
+                onDismiss = { showComingSoonDialog = false }
+            )
+        }
     }
 }
 
@@ -267,7 +280,8 @@ data class StitchCalendarDay(
 
 @Composable
 fun DashboardHeader(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNotificationClick: () -> Unit = {}
 ) {
     val today = remember { LocalDate.now() }
     val currentMonthYear = remember(today) {
@@ -291,7 +305,7 @@ fun DashboardHeader(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Calendar Title Row (Calendar Icon, Attendance subtitle, Current Month & Year)
+        // Calendar Title Row (Calendar Icon, Attendance subtitle, Current Month & Year, Notification Bell)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -330,6 +344,27 @@ fun DashboardHeader(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.5).sp
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Notification Bell Icon Button
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.04f))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardSurface)
+                    .border(1.dp, Slate100, RoundedCornerShape(12.dp))
+                    .clickable(onClick = onNotificationClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Notifications,
+                    contentDescription = "Notifications",
+                    tint = Slate700,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

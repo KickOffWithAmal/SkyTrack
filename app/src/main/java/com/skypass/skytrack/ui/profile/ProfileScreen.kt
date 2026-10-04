@@ -26,6 +26,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.skypass.skytrack.ui.components.ComingSoonDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -147,7 +148,8 @@ fun ProfileScreen(
         viewModel.loadProfileData(session)
     }
 
-    var punchInAlertsEnabled by remember { mutableStateOf(true) }
+    var punchInAlertsEnabled by remember { mutableStateOf(false) }
+    var showComingSoonDialog by remember { mutableStateOf(false) }
 
     // Avatar state management
     var remoteAvatarBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -277,9 +279,17 @@ fun ProfileScreen(
             // Preferences & Settings List Card
             PreferencesCard(
                 punchInAlertsEnabled = punchInAlertsEnabled,
-                onTogglePunchInAlerts = { punchInAlertsEnabled = !punchInAlertsEnabled },
+                onTogglePunchInAlerts = { showComingSoonDialog = true },
                 onChangePasswordClick = onChangePasswordClick
             )
+
+            if (showComingSoonDialog) {
+                ComingSoonDialog(
+                    title = "Punch-in Alerts",
+                    message = "This feature is coming soon.",
+                    onDismiss = { showComingSoonDialog = false }
+                )
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
