@@ -166,8 +166,8 @@ fun MonthlyStatisticsScreen(
 
             // User Greeting Section
             MonthlyUserGreeting(
-                name = session?.name ?: "User",
-                employeeId = session?.employeeId ?: "SK001"
+                name = session?.name ?: "Employee",
+                employeeId = session?.employeeId ?: ""
             )
 
             Spacer(modifier = Modifier.height(16.dp))

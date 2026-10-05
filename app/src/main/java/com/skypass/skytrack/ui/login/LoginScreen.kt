@@ -197,7 +197,7 @@ fun LoginScreen(
                                 employeeId = it.uppercase()
                                 onClearError()
                             },
-                            placeholder = "e.g. SK001",
+                            placeholder = "Enter Employee ID",
                             leadingIcon = Icons.Rounded.Badge,
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.Characters,

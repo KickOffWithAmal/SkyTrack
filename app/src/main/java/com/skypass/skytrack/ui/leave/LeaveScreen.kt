@@ -588,7 +588,7 @@ private fun EmployeeContextSubHeader(
                 )
 
                 Text(
-                    text = if (name.isNotBlank()) name else "Amal Ramachandran",
+                    text = if (name.isNotBlank()) name else "Employee",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Slate900
@@ -602,7 +602,7 @@ private fun EmployeeContextSubHeader(
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = if (employeeId.isNotBlank()) employeeId else "SK001",
+                        text = if (employeeId.isNotBlank()) employeeId else "",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Slate600
@@ -618,7 +618,7 @@ private fun EmployeeContextSubHeader(
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = if (role.isNotBlank()) role else "Visa Ops",
+                    text = if (role.isNotBlank()) role else "Employee",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Slate500
@@ -1877,7 +1877,7 @@ private fun SubmissionSuccessCard(message: String) {
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = if (message.isNotBlank()) message else "Reference ID: #LR-2026-088. Approver notification sent via SkyTrack dispatch.",
+                    text = if (message.isNotBlank()) message else "Approver notification sent via SkyTrack dispatch.",
                     fontSize = 11.sp,
                     color = Color(0xFF065F46)
                 )

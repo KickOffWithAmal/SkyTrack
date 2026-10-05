@@ -484,7 +484,7 @@ fun UserGreetingSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = name.ifBlank { "Amal Ramachandran" },
+                text = name.ifBlank { "Employee" },
                 color = Slate900,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
@@ -498,7 +498,7 @@ fun UserGreetingSection(
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = employeeId.ifBlank { "SK001" },
+                    text = employeeId.ifBlank { "" },
                     color = Slate500,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,

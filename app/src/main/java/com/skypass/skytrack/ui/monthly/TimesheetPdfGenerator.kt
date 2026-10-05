@@ -426,7 +426,7 @@ object TimesheetPdfGenerator {
 
         // Left Section: Employee Details
         val empName = session?.name ?: "Employee"
-        val empId = session?.employeeId ?: "SK001"
+        val empId = session?.employeeId ?: ""
         val role = session?.role?.replaceFirstChar { it.uppercase() } ?: "Operations Staff"
         val dept = session?.departmentName?.ifBlank { "Operations" } ?: "Operations"
 

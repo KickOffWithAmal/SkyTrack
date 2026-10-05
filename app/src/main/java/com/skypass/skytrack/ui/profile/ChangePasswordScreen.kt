@@ -144,7 +144,7 @@ fun ChangePasswordScreen(
         ) {
             // Top Bar Header with Circular Back Button
             ChangePasswordTopBar(
-                employeeId = session.employeeId.ifBlank { "SK001" },
+                employeeId = session.employeeId.ifBlank { "" },
                 onBack = onBack
             )
 
