@@ -108,6 +108,8 @@ private val Purple700 = Color(0xFF7E22CE)
 private val Amber50 = Color(0xFFFFFBEB)
 private val Amber600 = Color(0xFFD97706)
 private val Amber700 = Color(0xFFB45309)
+private val Blue50 = Color(0xFFEFF6FF)
+private val Blue600 = Color(0xFF2563EB)
 
 @Composable
 fun MonthlyStatisticsScreen(
@@ -178,14 +180,17 @@ fun MonthlyStatisticsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Trio Metric Cards (Present, Leaves, Daily Avg)
-            TrioMetricCardsGrid(summary = state.summary)
+            TrioMetricCardsGrid(
+                summary = state.summary,
+                attendanceList = state.attendance
+            )
 
             Spacer(modifier = Modifier.height(20.dp))
 
             // Action Banner (Timesheet Export)
             TimesheetExportCard(
                 isExporting = isExportingPdf,
-                targetHours = (state.summary?.workingDays ?: 20) * 8,
+                targetHours = (state.summary?.workingDays ?: 0) * 8,
                 onExportClick = {
                     if (!isExportingPdf) {
                         coroutineScope.launch {
@@ -284,7 +289,7 @@ private fun MonthlyTopHeader(
         }
     }
 
-    val workingDays = summary?.workingDays ?: 20
+    val workingDays = summary?.workingDays ?: 0
     val targetHours = workingDays * 8
 
     Row(
@@ -452,7 +457,12 @@ private fun MonthlyUserGreeting(
 private fun CentralCircularDial(summary: MonthlyAttendanceSummary?, uiState: MonthlyStatisticsUiState) {
     val rawTotal = uiState.totalActiveHoursStr.trim()
     val totalHoursStr = if (rawTotal.isBlank() || rawTotal == "00:00") "0h 00m" else rawTotal
-    val targetHoursStr = uiState.actualHoursNeededStr.ifBlank { "${(summary?.workingDays ?: 20) * 8}h" }
+    val defaultTargetHours = remember(summary?.workingDays) {
+        val days = summary?.workingDays ?: 0
+        if (days > 0) (days * 8.0) else 160.0
+    }
+
+    val targetHoursStr = uiState.actualHoursNeededStr.ifBlank { "${(summary?.workingDays ?: 0) * 8}h" }
 
     // Parse logged hours to calculate percentage
     val loggedHoursVal = remember(totalHoursStr) {
@@ -477,7 +487,7 @@ private fun CentralCircularDial(summary: MonthlyAttendanceSummary?, uiState: Mon
         }
     }
 
-    val targetHoursVal = remember(targetHoursStr) {
+    val targetHoursVal = remember(targetHoursStr, defaultTargetHours) {
         try {
             val match = Regex("""(\d+)h\s*(\d*)m?""").find(targetHoursStr)
             if (match != null) {
@@ -491,12 +501,12 @@ private fun CentralCircularDial(summary: MonthlyAttendanceSummary?, uiState: Mon
                     val m = parts[1].trim().toDoubleOrNull() ?: 0.0
                     h + (m / 60.0)
                 } else {
-                    targetHoursStr.replace(Regex("""[^\d.]"""), "").toDoubleOrNull() ?: 160.0
+                    targetHoursStr.replace(Regex("""[^\d.]"""), "").toDoubleOrNull() ?: defaultTargetHours
                 }
             }
         } catch (_: Exception) {
-            160.0
-        }.let { if (it <= 0) 160.0 else it }
+            defaultTargetHours
+        }.let { if (it <= 0) defaultTargetHours else it }
     }
 
     val progressFraction = remember(loggedHoursVal, targetHoursVal) {
@@ -623,8 +633,9 @@ private fun CentralCircularDial(summary: MonthlyAttendanceSummary?, uiState: Mon
                         tint = Emerald600,
                         modifier = Modifier.size(12.dp)
                     )
+                    val percentDone = (progressFraction * 100).toInt()
                     Text(
-                        text = "${uiState.actualHoursNeededStr} Actual Needed",
+                        text = "${uiState.actualHoursNeededStr} Target • $percentDone% Done",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = Emerald600
@@ -639,12 +650,65 @@ private fun CentralCircularDial(summary: MonthlyAttendanceSummary?, uiState: Mon
 // TRIO METRIC CARDS GRID
 // -------------------------------------------------------------
 @Composable
-private fun TrioMetricCardsGrid(summary: MonthlyAttendanceSummary?) {
-    val presentDays = summary?.presentDays ?: 18
-    val workingDays = (summary?.workingDays ?: 20).coerceAtLeast(1)
-    val absentDays = summary?.absentDays ?: 2
+private fun TrioMetricCardsGrid(
+    summary: MonthlyAttendanceSummary?,
+    attendanceList: List<MonthlyAttendanceDto>
+) {
+    val casualCount = remember(attendanceList) {
+        attendanceList.count { it.status.contains("casual", ignoreCase = true) }
+    }
+    val sickCount = remember(attendanceList) {
+        attendanceList.count { it.status.contains("sick", ignoreCase = true) }
+    }
+    val leaveCount = remember(attendanceList, summary) {
+        summary?.leaveDays ?: attendanceList.count {
+            val s = it.status.lowercase()
+            val hasPunch = !it.login.isNullOrBlank() || !it.rawCheckIn.isNullOrBlank()
+            !hasPunch && (s.contains("leave") || s.contains("sick") || s.contains("casual"))
+        }
+    }
+    val absentDays = remember(attendanceList, summary) {
+        summary?.absentDays ?: attendanceList.count { it.status.equals("absent", ignoreCase = true) }
+    }
+    val presentDays = remember(attendanceList, summary) {
+        summary?.presentDays?.takeIf { it > 0 } ?: attendanceList.count {
+            val s = it.status.lowercase()
+            val hasPunch = !it.login.isNullOrBlank() || !it.rawCheckIn.isNullOrBlank()
+            s.contains("present") || s.contains("working") || s.contains("incomplete") || hasPunch
+        }
+    }
+    val workingDays = remember(attendanceList, summary) {
+        (summary?.workingDays ?: attendanceList.count {
+            val s = it.status.lowercase()
+            !s.contains("weekend") && !s.contains("holiday")
+        }).coerceAtLeast(1)
+    }
     val averageHours = summary?.averageHours?.ifBlank { "0h 0m" } ?: "0h 0m"
-    val presentPercent = summary?.presentPercent ?: ((presentDays.toDouble() / workingDays.toDouble()) * 100).toInt()
+    val presentPercent = remember(summary, presentDays, workingDays) {
+        summary?.presentPercent ?: if (workingDays > 0) {
+            ((presentDays.toDouble() / workingDays.toDouble()) * 100).toInt().coerceIn(0, 100)
+        } else 0
+    }
+
+    val leaveDisplayDays = if (leaveCount > 0) leaveCount else absentDays
+    val leaveSubtitle = if (leaveCount > 0) "Leaves" else "Leaves / Absent"
+    val leaveBadgeText = when {
+        casualCount > 0 && sickCount > 0 -> "$casualCount Cas • $sickCount Sick"
+        casualCount > 0 -> "$casualCount Casual"
+        sickCount > 0 -> "$sickCount Sick"
+        absentDays > 0 -> "$absentDays Absent"
+        else -> "0 Taken"
+    }
+
+    val avgBadgeText = when {
+        !summary?.differenceFormatted.isNullOrBlank() && summary?.differenceFormatted != "0h 0m" && summary?.differenceFormatted != "00:00" ->
+            "${summary.differenceFormatted} OT"
+        !summary?.overtimeFormatted.isNullOrBlank() && summary?.overtimeFormatted != "0h 0m" && summary?.overtimeFormatted != "00:00" ->
+            "+${summary.overtimeFormatted} OT"
+        !summary?.totalBreakFormatted.isNullOrBlank() && summary?.totalBreakFormatted != "0h 0m" && summary?.totalBreakFormatted != "00:00" ->
+            "Break: ${summary.totalBreakFormatted}"
+        else -> "On Target"
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -668,9 +732,9 @@ private fun TrioMetricCardsGrid(summary: MonthlyAttendanceSummary?) {
             icon = Icons.Rounded.EventBusy,
             iconTint = BrandRed,
             iconBg = Rose50,
-            value = "$absentDays Days",
-            subtitle = "Leaves",
-            badgeText = "1 Cas • 1 Sick",
+            value = "$leaveDisplayDays Days",
+            subtitle = leaveSubtitle,
+            badgeText = leaveBadgeText,
             badgeBg = Rose50,
             badgeTextColor = Rose700,
             modifier = Modifier.weight(1f)
@@ -683,7 +747,7 @@ private fun TrioMetricCardsGrid(summary: MonthlyAttendanceSummary?) {
             iconBg = Purple50,
             value = averageHours,
             subtitle = "Daily Avg",
-            badgeText = "+15m OT",
+            badgeText = avgBadgeText,
             badgeBg = Purple50,
             badgeTextColor = Purple700,
             modifier = Modifier.weight(1f)
@@ -899,18 +963,39 @@ private fun DailyAttendanceLogSection(
     selectedFilterIndex: Int,
     onFilterSelected: (Int) -> Unit
 ) {
-    val presentCount = remember(attendanceList) {
-        attendanceList.count { it.status.contains("present", ignoreCase = true) || !it.hours.isNullOrBlank() }
-    }
-    val leaveCount = remember(attendanceList) {
-        attendanceList.count { it.status.contains("leave", ignoreCase = true) || it.status.contains("absent", ignoreCase = true) }
+    val todayStr = remember { java.time.LocalDate.now().toString() }
+    val validList = remember(attendanceList, todayStr) {
+        attendanceList.filter { it.date <= todayStr }
     }
 
-    val filteredList = remember(attendanceList, selectedFilterIndex) {
+    val presentCount = remember(validList) {
+        validList.count { 
+            val s = it.status.lowercase()
+            val hasPunch = !it.login.isNullOrBlank() || !it.rawCheckIn.isNullOrBlank()
+            s.contains("present") || s.contains("working") || s.contains("incomplete") || hasPunch
+        }
+    }
+    val leaveOrAbsentCount = remember(validList) {
+        validList.count { 
+            val s = it.status.lowercase()
+            val hasPunch = !it.login.isNullOrBlank() || !it.rawCheckIn.isNullOrBlank()
+            !hasPunch && (s.contains("leave") || s.contains("sick") || s.contains("casual") || s.contains("absent"))
+        }
+    }
+
+    val filteredList = remember(validList, selectedFilterIndex) {
         when (selectedFilterIndex) {
-            1 -> attendanceList.filter { it.status.contains("present", ignoreCase = true) || (!it.login.isNullOrBlank() && it.status.isBlank()) }
-            2 -> attendanceList.filter { it.status.contains("leave", ignoreCase = true) || it.status.contains("absent", ignoreCase = true) }
-            else -> attendanceList
+            1 -> validList.filter { 
+                val s = it.status.lowercase()
+                val hasPunch = !it.login.isNullOrBlank() || !it.rawCheckIn.isNullOrBlank()
+                s.contains("present") || s.contains("working") || s.contains("incomplete") || hasPunch
+            }
+            2 -> validList.filter { 
+                val s = it.status.lowercase()
+                val hasPunch = !it.login.isNullOrBlank() || !it.rawCheckIn.isNullOrBlank()
+                !hasPunch && (s.contains("leave") || s.contains("sick") || s.contains("casual") || s.contains("absent"))
+            }
+            else -> validList
         }
     }
 
@@ -957,7 +1042,7 @@ private fun DailyAttendanceLogSection(
                     onClick = { onFilterSelected(1) }
                 )
                 FilterTabButton(
-                    title = "Leaves ($leaveCount)",
+                    title = "Leaves ($leaveOrAbsentCount)",
                     isSelected = selectedFilterIndex == 2,
                     onClick = { onFilterSelected(2) }
                 )
@@ -1022,10 +1107,46 @@ private fun FilterTabButton(
 @Composable
 private fun AttendanceRecordCard(item: MonthlyAttendanceDto) {
     val statusLower = item.status.lowercase()
-    val isPresent = statusLower.contains("present") || (!item.login.isNullOrBlank() && item.status.isBlank())
     val isSick = statusLower.contains("sick")
     val isCasual = statusLower.contains("casual")
-    val isLeave = isSick || isCasual || statusLower.contains("leave") || statusLower.contains("absent")
+    val isLeave = isSick || isCasual || statusLower.contains("leave")
+    val isAbsent = statusLower.contains("absent")
+    val isHoliday = statusLower.contains("holiday")
+    val isWeekend = statusLower.contains("weekend")
+
+    fun formatPunchTime(timeStr: String?): String {
+        if (timeStr.isNullOrBlank()) return "--"
+        val trimmed = timeStr.trim()
+        if (trimmed.matches(Regex("""^\d{1,2}:\d{2}(\s*[AaPp][Mm])?$"""))) {
+            return trimmed
+        }
+        try {
+            val instant = java.time.Instant.parse(trimmed)
+            val zone = java.time.ZoneId.of("Asia/Kolkata")
+            return java.time.format.DateTimeFormatter.ofPattern("hh:mm a", java.util.Locale.ENGLISH)
+                .format(instant.atZone(zone))
+        } catch (_: Exception) {}
+        try {
+            val ldt = java.time.LocalDateTime.parse(trimmed.take(19))
+            return java.time.format.DateTimeFormatter.ofPattern("hh:mm a", java.util.Locale.ENGLISH).format(ldt)
+        } catch (_: Exception) {}
+        return trimmed
+    }
+
+    val rawLogin = item.login?.takeIf { it.isNotBlank() } ?: item.rawCheckIn?.takeIf { it.isNotBlank() }
+    val todayStr = remember { java.time.LocalDate.now().toString() }
+    val isPastDay = item.date < todayStr
+    val rawLogout = item.logout?.takeIf { it.isNotBlank() }
+        ?: item.rawCheckOut?.takeIf { it.isNotBlank() }
+        ?: if (isPastDay && !rawLogin.isNullOrBlank()) "06:00 PM" else null
+    val hasPunchTimes = !rawLogin.isNullOrBlank()
+    val hasOutTime = !rawLogout.isNullOrBlank()
+
+    val inTime = formatPunchTime(rawLogin)
+    val outTime = formatPunchTime(rawLogout)
+
+    val isWorking = statusLower.contains("working") || (hasPunchTimes && !hasOutTime && item.date == todayStr)
+    val isPresent = statusLower.contains("present") || statusLower.contains("incomplete") || (hasPunchTimes && hasOutTime) || (hasPunchTimes && item.date != todayStr)
 
     val formattedDate = remember(item.date) {
         try {
@@ -1035,23 +1156,49 @@ private fun AttendanceRecordCard(item: MonthlyAttendanceDto) {
         }
     }
 
-    val (iconBg, iconTint, statusBadgeText, badgeBg, badgeTextColor) = when {
-        isSick -> Tuple5(Amber50, Amber600, "Sick Leave", Amber50, Amber700)
-        isCasual -> Tuple5(Rose50, BrandRed, "Casual Leave", Rose50, Rose700)
-        isLeave -> Tuple5(Rose50, BrandRed, item.status.ifBlank { "Leave" }, Rose50, Rose700)
-        else -> Tuple5(Emerald50, Emerald600, "Present", Emerald50, Emerald600)
+    val (iconBg, iconTint, statusBadgeText, badgeBg, badgeTextColor, iconVector) = when {
+        isWorking -> Tuple6(Blue50, Blue600, "Working", Blue50, Blue600, Icons.AutoMirrored.Rounded.Login)
+        isPresent -> Tuple6(Emerald50, Emerald600, "Present", Emerald50, Emerald600, Icons.AutoMirrored.Rounded.Login)
+        isSick -> Tuple6(Amber50, Amber600, "Sick Leave", Amber50, Amber700, Icons.Rounded.EventBusy)
+        isCasual -> Tuple6(Rose50, BrandRed, "Casual Leave", Rose50, Rose700, Icons.Rounded.EventBusy)
+        isLeave -> Tuple6(Rose50, BrandRed, item.status.ifBlank { "Leave" }, Rose50, Rose700, Icons.Rounded.EventBusy)
+        isAbsent -> Tuple6(Rose50, BrandRed, "Absent", Rose50, Rose700, Icons.Rounded.EventBusy)
+        isHoliday -> Tuple6(Blue50, Blue600, "Holiday", Blue50, Blue600, Icons.Rounded.CalendarToday)
+        isWeekend -> Tuple6(Slate100, Slate500, "Weekend", Slate100, Slate600, Icons.Rounded.CalendarToday)
+        else -> Tuple6(Slate100, Slate500, item.status.ifBlank { "Off" }, Slate100, Slate600, Icons.Rounded.CalendarToday)
     }
 
-    val timeSubtitle = if (isLeave) {
-        "Approved • Verified"
-    } else {
-        val inTime = if (!item.login.isNullOrBlank()) item.login else "09:00 AM"
-        val outTime = if (!item.logout.isNullOrBlank()) item.logout else "06:00 PM"
-        "$inTime - $outTime"
+    val timeSubtitle = when {
+        isWorking -> "$inTime - Active"
+        hasPunchTimes && hasOutTime -> "$inTime - $outTime"
+        hasPunchTimes && item.date == todayStr -> "$inTime - Active"
+        hasPunchTimes -> "$inTime - 06:00 PM"
+        isLeave -> "Approved • Verified"
+        isAbsent -> "Unmarked Absence"
+        isHoliday -> "Public Holiday"
+        isWeekend -> "Non-Working Day"
+        else -> "--"
     }
 
-    val hoursRightText = if (isLeave) "Full Day" else item.hours?.ifBlank { "8h 00m" } ?: "8h 00m"
-    val otSubtitle = if (isLeave) "Paid Off" else "+10m OT"
+    val hoursRightText = when {
+        !item.hours.isNullOrBlank() && item.hours != "00:00" && item.hours != "0h 00m" -> item.hours
+        isWorking -> item.hours?.takeIf { it.isNotBlank() && it != "0h 00m" } ?: "Active"
+        hasPunchTimes -> item.hours?.takeIf { it.isNotBlank() && it != "0h 00m" } ?: "3h 12m"
+        isLeave -> "Full Day"
+        isAbsent -> "0h 00m"
+        isHoliday || isWeekend -> "Off"
+        else -> item.hours?.ifBlank { "0h 00m" } ?: "0h 00m"
+    }
+
+    val otSubtitle = when {
+        isWorking -> "In Progress"
+        hasPunchTimes && !item.breakFormatted.isNullOrBlank() && item.breakFormatted != "0m" -> "Break: ${item.breakFormatted}"
+        hasPunchTimes -> "Verified"
+        isLeave -> "Paid Leave"
+        isAbsent -> "Unpaid"
+        isHoliday || isWeekend -> "Off"
+        else -> "Verified"
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1080,7 +1227,7 @@ private fun AttendanceRecordCard(item: MonthlyAttendanceDto) {
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isLeave) Icons.Rounded.EventBusy else Icons.AutoMirrored.Rounded.Login,
+                        imageVector = iconVector,
                         contentDescription = null,
                         tint = iconTint,
                         modifier = Modifier.size(16.dp)
@@ -1127,23 +1274,24 @@ private fun AttendanceRecordCard(item: MonthlyAttendanceDto) {
                     text = hoursRightText,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isLeave) Rose700 else Slate800
+                    color = if (isLeave || isAbsent) Rose700 else Slate800
                 )
                 Text(
                     text = otSubtitle,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isLeave) Slate400 else Emerald600
+                    color = if (isLeave || isAbsent) Slate400 else if (isHoliday || isWeekend) Slate400 else Emerald600
                 )
             }
         }
     }
 }
 
-private data class Tuple5<A, B, C, D, E>(
+private data class Tuple6<A, B, C, D, E, F>(
     val a: A,
     val b: B,
     val c: C,
     val d: D,
-    val e: E
+    val e: E,
+    val f: F
 )

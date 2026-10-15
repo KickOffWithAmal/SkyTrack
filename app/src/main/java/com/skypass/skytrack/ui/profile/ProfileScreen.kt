@@ -58,10 +58,12 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.skypass.skytrack.util.ImageCompressor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -128,9 +130,6 @@ private val Emerald700 = Color(0xFF047857)
 private val Purple50 = Color(0xFFFAF5FF)
 private val Purple600 = Color(0xFF9333EA)
 
-private const val AVATAR_URL =
-    "https://lh3.googleusercontent.com/aida/AEtjO1UKNgsYg9P5WsyUxq3W1LD1y34enbvXVIMZumchi9r0bPZzreTkECLdNJ7nmSAs9yfeBH8-lPIHjByNf46E9OL97GJHEFjjW82Mad_7BqRjPp3StbroQlCN5u9aZo4n9Gwg9wuMADdYw7gjjOyLpL0yiJGh0K-Za20DqOhyPD5nLTMn-AsxmgAetZE6g6_fNTHJ_BobADmqbCzLj_940koSpjYY0m0seATXxdWF0uDqMSbnccMBwb87paSf"
-
 @Composable
 fun ProfileScreen(
     session: Session,
@@ -150,30 +149,44 @@ fun ProfileScreen(
 
     var punchInAlertsEnabled by remember { mutableStateOf(false) }
     var showComingSoonDialog by remember { mutableStateOf(false) }
-
-    // Avatar state management
-    var remoteAvatarBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    var customAvatarBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    var isPhotoRemoved by remember { mutableStateOf(false) }
     var showPhotoSourceSheet by remember { mutableStateOf(false) }
 
-    // Asynchronously load the default remote avatar
-    LaunchedEffect(AVATAR_URL) {
+    // Active photo URL from live UI state or session fallback
+    val currentPhotoUrl = profileUiState.profilePhotoUrl.ifBlank { session.profilePhotoUrl }
+    var loadedAvatarBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    // Asynchronously load the compressed avatar from DB / DataStore (base64 or remote URL)
+    LaunchedEffect(currentPhotoUrl) {
+        if (currentPhotoUrl.isBlank()) {
+            loadedAvatarBitmap = null
+            return@LaunchedEffect
+        }
         withContext(Dispatchers.IO) {
             try {
-                val url = URL(AVATAR_URL)
-                val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
-                conn.doInput = true
-                conn.connect()
-                val stream = conn.inputStream
-                val bmp = BitmapFactory.decodeStream(stream)
-                if (bmp != null) {
-                    remoteAvatarBitmap = bmp.asImageBitmap()
+                if (currentPhotoUrl.startsWith("data:image/") || (!currentPhotoUrl.startsWith("http://") && !currentPhotoUrl.startsWith("https://"))) {
+                    val bmp = ImageCompressor.decodeBase64ToBitmap(currentPhotoUrl)
+                    if (bmp != null) {
+                        loadedAvatarBitmap = bmp.asImageBitmap()
+                    } else {
+                        loadedAvatarBitmap = null
+                    }
+                } else {
+                    val url = URL(currentPhotoUrl)
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.connectTimeout = 5000
+                    conn.readTimeout = 5000
+                    conn.doInput = true
+                    conn.connect()
+                    val stream = conn.inputStream
+                    val bmp = BitmapFactory.decodeStream(stream)
+                    if (bmp != null) {
+                        loadedAvatarBitmap = bmp.asImageBitmap()
+                    } else {
+                        loadedAvatarBitmap = null
+                    }
                 }
             } catch (_: Exception) {
-                // Keep null for monogram fallback
+                loadedAvatarBitmap = null
             }
         }
     }
@@ -183,10 +196,18 @@ fun ProfileScreen(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap: Bitmap? ->
         if (bitmap != null) {
-            customAvatarBitmap = bitmap.asImageBitmap()
-            isPhotoRemoved = false
             showPhotoSourceSheet = false
-            Toast.makeText(context, "Profile photo updated from camera", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Compressing & saving photo...", Toast.LENGTH_SHORT).show()
+            viewModel.updateProfilePhoto(
+                session = session,
+                bitmap = bitmap,
+                onSuccess = {
+                    Toast.makeText(context, "Profile photo saved to database", Toast.LENGTH_SHORT).show()
+                },
+                onError = { err ->
+                    Toast.makeText(context, "Failed to save photo: $err", Toast.LENGTH_SHORT).show()
+                }
+            )
         }
     }
 
@@ -206,26 +227,24 @@ fun ProfileScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bmp = BitmapFactory.decodeStream(inputStream)
-                if (bmp != null) {
-                    customAvatarBitmap = bmp.asImageBitmap()
-                    isPhotoRemoved = false
-                    showPhotoSourceSheet = false
-                    Toast.makeText(context, "Profile photo updated from gallery", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Failed to load image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            showPhotoSourceSheet = false
+            val bmp = ImageCompressor.decodeSampledBitmapFromUri(context, uri, reqSize = 512)
+            if (bmp != null) {
+                Toast.makeText(context, "Compressing & saving photo...", Toast.LENGTH_SHORT).show()
+                viewModel.updateProfilePhoto(
+                    session = session,
+                    bitmap = bmp,
+                    onSuccess = {
+                        Toast.makeText(context, "Profile photo saved to database", Toast.LENGTH_SHORT).show()
+                    },
+                    onError = { err ->
+                        Toast.makeText(context, "Failed to save photo: $err", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            } else {
+                Toast.makeText(context, "Failed to read image from gallery", Toast.LENGTH_SHORT).show()
             }
         }
-    }
-
-    // Effective avatar bitmap: custom takes priority, unless explicitly removed
-    val effectiveAvatarBitmap: ImageBitmap? = when {
-        isPhotoRemoved -> null
-        customAvatarBitmap != null -> customAvatarBitmap
-        else -> remoteAvatarBitmap
     }
 
     Box(
@@ -250,7 +269,8 @@ fun ProfileScreen(
                 name = session.name.ifBlank { "" },
                 employeeId = session.employeeId.ifBlank { "" },
                 role = session.role.ifBlank { "" },
-                avatarBitmap = effectiveAvatarBitmap,
+                avatarBitmap = loadedAvatarBitmap,
+                isUpdatingPhoto = profileUiState.isUpdatingPhoto,
                 onEditPhotoClick = {
                     showPhotoSourceSheet = true
                 }
@@ -333,10 +353,16 @@ fun ProfileScreen(
                     galleryLauncher.launch("image/*")
                 },
                 onRemovePhotoClick = {
-                    customAvatarBitmap = null
-                    isPhotoRemoved = true
                     showPhotoSourceSheet = false
-                    Toast.makeText(context, "Profile photo removed", Toast.LENGTH_SHORT).show()
+                    viewModel.removeProfilePhoto(
+                        session = session,
+                        onSuccess = {
+                            Toast.makeText(context, "Profile photo removed", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { err ->
+                            Toast.makeText(context, "Failed to remove photo: $err", Toast.LENGTH_SHORT).show()
+                        }
+                    )
                 }
             )
         }
@@ -634,6 +660,7 @@ private fun ProfileHeroSection(
     employeeId: String,
     role: String,
     avatarBitmap: ImageBitmap?,
+    isUpdatingPhoto: Boolean = false,
     onEditPhotoClick: () -> Unit
 ) {
     // Pulse animation for Active Employment status dot
@@ -688,7 +715,13 @@ private fun ProfileHeroSection(
                         .background(Slate100),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (avatarBitmap != null) {
+                    if (isUpdatingPhoto) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            color = BrandCrimson,
+                            strokeWidth = 3.dp
+                        )
+                    } else if (avatarBitmap != null) {
                         Image(
                             bitmap = avatarBitmap,
                             contentDescription = name,
@@ -709,10 +742,11 @@ private fun ProfileHeroSection(
                         ) {
                             Text(
                                 text = name.split(" ")
+                                    .filter { it.isNotBlank() }
                                     .take(2)
                                     .mapNotNull { it.firstOrNull()?.uppercase() }
                                     .joinToString("")
-                                    .ifBlank { "AR" },
+                                    .ifBlank { "ST" },
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Slate700
@@ -1272,7 +1306,7 @@ private fun SignOutSection(onLogout: () -> Unit) {
         Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = "SkyTrack Mobile v2.4.1 (Build 2026.02) • Skypass Visa Services",
+            text = "SkyTrack Mobile v1.0.0 • Skypass Visa Services",
             fontSize = 10.sp,
             fontWeight = FontWeight.Medium,
             color = Slate400,

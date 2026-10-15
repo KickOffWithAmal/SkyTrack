@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
 import com.skypass.skytrack.data.repository.AuthRepository
 import com.skypass.skytrack.ui.home.HomeScreen
 import com.skypass.skytrack.ui.home.HomeViewModel
@@ -28,6 +30,12 @@ import com.skypass.skytrack.ui.profile.ProfileScreen
 import com.skypass.skytrack.ui.profile.ProfileViewModel
 import com.skypass.skytrack.ui.splash.SplashScreen
 import com.skypass.skytrack.ui.theme.SkyTrackTheme
+import com.skypass.skytrack.data.local.ConnectivityObserver
+import com.skypass.skytrack.data.sync.OfflineSyncManager
+import com.skypass.skytrack.ui.components.OfflineBanner
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.Alignment
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -37,6 +45,12 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var authRepository: AuthRepository
+
+    @Inject
+    lateinit var connectivityObserver: ConnectivityObserver
+
+    @Inject
+    lateinit var offlineSyncManager: OfflineSyncManager
 
     private val loginViewModel: LoginViewModel by viewModels()
     private val homeViewModel: HomeViewModel by viewModels()
@@ -55,6 +69,15 @@ class MainActivity : ComponentActivity() {
                     val session by authRepository.session
                         .collectAsState(initial = null)
 
+                    val networkStatus by connectivityObserver.observe().collectAsState(
+                        initial = if (connectivityObserver.isConnected()) ConnectivityObserver.Status.AVAILABLE else ConnectivityObserver.Status.UNAVAILABLE
+                    )
+                    val isSyncing by offlineSyncManager.isSyncing.collectAsState()
+                    val isOffline = networkStatus != ConnectivityObserver.Status.AVAILABLE
+
+                    val loginState by loginViewModel.state.collectAsState()
+                    val rememberedAccount by loginViewModel.rememberedAccount.collectAsState()
+
                     var showLeave by remember {
                         mutableStateOf(false)
                     }
@@ -71,151 +94,172 @@ class MainActivity : ComponentActivity() {
                         mutableStateOf(false)
                     }
 
-                    var showSplash by remember {
-                        mutableStateOf(true)
+                    var splashAnimationFinished by remember {
+                        mutableStateOf(false)
                     }
 
-                    when {
-                        showSplash -> {
-                            SplashScreen(
-                                onFinished = {
-                                    showSplash = false
-                                }
-                            )
-                        }
-                        session == null -> {
-                            showLeave = false
-                            showMonthlyStatistics = false
-                            showProfile = false
-                            showChangePassword = false
+                    var isSessionLoaded by remember {
+                        mutableStateOf(false)
+                    }
 
-                            val rememberedAccount by loginViewModel.rememberedAccount.collectAsState()
+                    LaunchedEffect(Unit) {
+                        authRepository.session.first()
+                        isSessionLoaded = true
+                    }
 
-                            LoginScreen(
-                                state = loginViewModel.state.collectAsState().value,
-                                onLogin = loginViewModel::login,
-                                onSuccess = {},
-                                onClearError = loginViewModel::clearError,
-                                rememberedAccount = rememberedAccount
-                            )
-                        }
+                    val showSplash = !splashAnimationFinished || !isSessionLoaded
 
-                        showChangePassword -> {
-                            ChangePasswordScreen(
-                                session = session!!,
-                                onBack = {
-                                    showChangePassword = false
-                                },
-                                onNavigateHome = {
-                                    showChangePassword = false
-                                    showProfile = false
-                                    showLeave = false
-                                    showMonthlyStatistics = false
-                                },
-                                onNavigateLeaves = {
-                                    showChangePassword = false
-                                    showProfile = false
-                                    showMonthlyStatistics = false
-                                    showLeave = true
-                                },
-                                onNavigateStatistics = {
-                                    showChangePassword = false
-                                    showProfile = false
-                                    showLeave = false
-                                    showMonthlyStatistics = true
-                                }
-                            )
-                        }
-
-                        showProfile -> {
-                            ProfileScreen(
-                                session = session!!,
-                                viewModel = profileViewModel,
-                                onLogout = {
-                                    lifecycleScope.launch {
-                                        authRepository.logout()
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when {
+                            showSplash -> {
+                                SplashScreen(
+                                    onFinished = {
+                                        splashAnimationFinished = true
                                     }
-                                },
-                                onNavigateHome = {
-                                    showProfile = false
-                                    showLeave = false
-                                    showMonthlyStatistics = false
-                                },
-                                onNavigateLeaves = {
-                                    showProfile = false
-                                    showMonthlyStatistics = false
-                                    showLeave = true
-                                },
-                                onNavigateStatistics = {
-                                    showProfile = false
-                                    showLeave = false
-                                    showMonthlyStatistics = true
-                                },
-                                onChangePasswordClick = {
-                                    showChangePassword = true
-                                }
-                            )
-                        }
+                                )
+                            }
+                            session == null -> {
+                                showLeave = false
+                                showMonthlyStatistics = false
+                                showProfile = false
+                                showChangePassword = false
 
-                        showMonthlyStatistics -> {
-                            MonthlyStatisticsScreen(
-                                viewModel = monthlyStatisticsViewModel,
-                                session = session!!,
-                                onBack = {
-                                    showMonthlyStatistics = false
-                                },
-                                onOpenLeave = {
-                                    showMonthlyStatistics = false
-                                    showLeave = true
-                                },
-                                onOpenProfile = {
-                                    showMonthlyStatistics = false
-                                    showLeave = false
-                                    showProfile = true
-                                }
-                            )
-                        }
+                                LoginScreen(
+                                    state = loginState,
+                                    onLogin = loginViewModel::login,
+                                    onSuccess = {},
+                                    onClearError = loginViewModel::clearError,
+                                    rememberedAccount = rememberedAccount
+                                )
+                            }
 
-                        showLeave -> {
-                            LeaveScreen(
-                                session = session!!,
-                                viewModel = leaveViewModel,
-                                onBack = {
-                                    showLeave = false
-                                },
-                                onNavigateHome = {
-                                    showLeave = false
-                                },
-                                onNavigateStatistics = {
-                                    showLeave = false
-                                    showMonthlyStatistics = true
-                                },
-                                onNavigateProfile = {
-                                    showLeave = false
-                                    showMonthlyStatistics = false
-                                    showProfile = true
-                                }
-                            )
-                        }
-
-                        else -> {
-                            HomeScreen(
-                                session = session!!,
-                                viewModel = homeViewModel,
-                                onLogout = {
-                                    lifecycleScope.launch {
-                                        authRepository.logout()
+                            showChangePassword -> {
+                                ChangePasswordScreen(
+                                    session = session!!,
+                                    onBack = {
+                                        showChangePassword = false
+                                    },
+                                    onNavigateHome = {
+                                        showChangePassword = false
+                                        showProfile = false
+                                        showLeave = false
+                                        showMonthlyStatistics = false
+                                    },
+                                    onNavigateLeaves = {
+                                        showChangePassword = false
+                                        showProfile = false
+                                        showMonthlyStatistics = false
+                                        showLeave = true
+                                    },
+                                    onNavigateStatistics = {
+                                        showChangePassword = false
+                                        showProfile = false
+                                        showLeave = false
+                                        showMonthlyStatistics = true
                                     }
-                                },
-                                onOpenLeave = {
-                                    showLeave = true
-                                },
-                                onOpenMonthlyStatistics = {
-                                    showMonthlyStatistics = true
-                                },
-                                onOpenProfile = {
-                                    showProfile = true
-                                }
+                                )
+                            }
+
+                            showProfile -> {
+                                ProfileScreen(
+                                    session = session!!,
+                                    viewModel = profileViewModel,
+                                    onLogout = {
+                                        lifecycleScope.launch {
+                                            authRepository.logout()
+                                        }
+                                    },
+                                    onNavigateHome = {
+                                        showProfile = false
+                                        showLeave = false
+                                        showMonthlyStatistics = false
+                                    },
+                                    onNavigateLeaves = {
+                                        showProfile = false
+                                        showMonthlyStatistics = false
+                                        showLeave = true
+                                    },
+                                    onNavigateStatistics = {
+                                        showProfile = false
+                                        showLeave = false
+                                        showMonthlyStatistics = true
+                                    },
+                                    onChangePasswordClick = {
+                                        showChangePassword = true
+                                    }
+                                )
+                            }
+
+                            showMonthlyStatistics -> {
+                                MonthlyStatisticsScreen(
+                                    viewModel = monthlyStatisticsViewModel,
+                                    session = session!!,
+                                    onBack = {
+                                        showMonthlyStatistics = false
+                                    },
+                                    onOpenLeave = {
+                                        showMonthlyStatistics = false
+                                        showLeave = true
+                                    },
+                                    onOpenProfile = {
+                                        showMonthlyStatistics = false
+                                        showLeave = false
+                                        showProfile = true
+                                    }
+                                )
+                            }
+
+                            showLeave -> {
+                                LeaveScreen(
+                                    session = session!!,
+                                    viewModel = leaveViewModel,
+                                    onBack = {
+                                        showLeave = false
+                                    },
+                                    onNavigateHome = {
+                                        showLeave = false
+                                    },
+                                    onNavigateStatistics = {
+                                        showLeave = false
+                                        showMonthlyStatistics = true
+                                    },
+                                    onNavigateProfile = {
+                                        showLeave = false
+                                        showMonthlyStatistics = false
+                                        showProfile = true
+                                    }
+                                )
+                            }
+
+                            else -> {
+                                HomeScreen(
+                                    session = session!!,
+                                    viewModel = homeViewModel,
+                                    onLogout = {
+                                        lifecycleScope.launch {
+                                            authRepository.logout()
+                                        }
+                                    },
+                                    onOpenLeave = {
+                                        showLeave = true
+                                    },
+                                    onOpenMonthlyStatistics = {
+                                        showMonthlyStatistics = true
+                                    },
+                                    onOpenProfile = {
+                                        showProfile = true
+                                    }
+                                )
+                            }
+                        }
+
+                        if (!showSplash && session != null) {
+                            OfflineBanner(
+                                isOffline = isOffline,
+                                isSyncing = isSyncing,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .statusBarsPadding()
                             )
                         }
                     }

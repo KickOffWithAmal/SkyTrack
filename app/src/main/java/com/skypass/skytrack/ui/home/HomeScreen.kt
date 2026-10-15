@@ -24,6 +24,8 @@ import androidx.compose.material.icons.rounded.LocalCafe
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Person
 import com.skypass.skytrack.ui.components.ComingSoonDialog
+import com.skypass.skytrack.ui.components.SkyTrackDialog
+import com.skypass.skytrack.ui.components.SkyTrackDialogType
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -114,13 +116,13 @@ fun HomeScreen(
     }
 
     if (state.error != null) {
-        AlertDialog(
-            onDismissRequest = viewModel::clearError,
-            title = { Text("SkyTrack", fontWeight = FontWeight.Bold) },
-            text = { Text(state.error.orEmpty()) },
-            confirmButton = {
-                Button(onClick = viewModel::clearError) { Text("OK") }
-            }
+        SkyTrackDialog(
+            title = "SkyTrack",
+            message = state.error.orEmpty(),
+            type = SkyTrackDialogType.ERROR,
+            confirmText = "OK",
+            onConfirm = viewModel::clearError,
+            onDismissRequest = viewModel::clearError
         )
     }
 
@@ -288,7 +290,7 @@ fun DashboardHeader(
         try {
             today.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH))
         } catch (_: Exception) {
-            "February 2026"
+            "${today.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${today.year}"
         }
     }
 

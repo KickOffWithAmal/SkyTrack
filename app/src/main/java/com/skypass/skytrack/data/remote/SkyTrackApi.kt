@@ -70,6 +70,13 @@ interface SkyTrackApi {
     ): LeaveBalanceResponse
 
     @POST
+    suspend fun cancelLeave(
+        @Url endpoint: String,
+        @Header("Authorization") authorization: String,
+        @Body request: CancelLeaveRequest
+    ): CancelLeaveResponse
+
+    @POST
     suspend fun attendanceMonthly(
         @Url endpoint: String,
         @Header("Authorization") authorization: String,
@@ -82,5 +89,19 @@ interface SkyTrackApi {
         @Header("Authorization") authorization: String,
         @Body request: AttendanceRequest
     ): HolidayResponse
+
+    @POST
+    suspend fun updateProfilePhoto(
+        @Url endpoint: String,
+        @Header("Authorization") authorization: String,
+        @Body request: UpdateProfilePhotoRequest
+    ): UpdateProfilePhotoResponse
+
+    @POST
+    suspend fun getProfile(
+        @Url endpoint: String,
+        @Header("Authorization") authorization: String,
+        @Body request: AttendanceRequest
+    ): ProfileResponse
 }
 

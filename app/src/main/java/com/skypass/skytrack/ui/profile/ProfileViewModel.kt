@@ -2,10 +2,13 @@ package com.skypass.skytrack.ui.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.graphics.Bitmap
 import com.skypass.skytrack.data.local.Session
 import com.skypass.skytrack.data.local.SessionDataStore
+import com.skypass.skytrack.data.repository.AuthRepository
 import com.skypass.skytrack.data.repository.LeaveRepository
 import com.skypass.skytrack.data.repository.MonthlyStatisticsRepository
+import com.skypass.skytrack.util.ImageCompressor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -14,6 +17,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class ProfileUiState(
@@ -23,14 +27,18 @@ data class ProfileUiState(
     val overtimeWork: String = "0h 00m",
     val reportingManager: String = "Not Assigned",
     val department: String = "Operations",
-    val workShift: String = "Standard Shift (09:00 AM - 06:00 PM)"
+    val workShift: String = "Standard Shift (09:00 AM - 06:00 PM)",
+    val profilePhotoUrl: String = "",
+    val isUpdatingPhoto: Boolean = false,
+    val photoError: String? = null
 )
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val monthlyRepository: MonthlyStatisticsRepository,
     private val leaveRepository: LeaveRepository,
-    private val sessionDataStore: SessionDataStore
+    private val sessionDataStore: SessionDataStore,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -46,23 +54,25 @@ class ProfileViewModel @Inject constructor(
 
         val dept = session.departmentName
             .takeIf { it.isNotBlank() && !it.contains("Schengen & UK", ignoreCase = true) }
-            ?: "Operations"
+            ?: "Unassigned"
 
         val shift = session.workShiftName
             .takeIf { it.isNotBlank() && !it.contains("General (09:00", ignoreCase = true) }
             ?: "Standard Shift (09:00 AM - 06:00 PM)"
 
         val initialAttendance = session.attendancePercent
-            .takeIf { it.isNotBlank() && it != "96.4%" }
-            ?: "100.0%"
+            .takeIf { it.isNotBlank() && it != "96.4%" && it != "100.0%" }
+            ?: "0.0%"
 
         val initialLeaveQuota = session.leaveQuota
-            .takeIf { it.isNotBlank() && it != "11 Days" }
-            ?: "18 Days"
+            .takeIf { it.isNotBlank() && it != "11 Days" && it != "18 Days" }
+            ?: "0 Days"
 
         val initialOvertime = session.ytdOvertime
             .takeIf { it.isNotBlank() && it != "+14h 30m" }
-            ?: "0h 00m"
+            ?: "0h 0m"
+
+        val initialPhoto = session.profilePhotoUrl
 
         _uiState.value = ProfileUiState(
             isLoading = true,
@@ -71,13 +81,26 @@ class ProfileViewModel @Inject constructor(
             overtimeWork = initialOvertime,
             reportingManager = manager,
             department = dept,
-            workShift = shift
+            workShift = shift,
+            profilePhotoUrl = initialPhoto
         )
 
         viewModelScope.launch {
             var finalAttendance = initialAttendance
             var finalOvertime = initialOvertime
             var finalLeaveQuota = initialLeaveQuota
+
+            // 0. Sync fresh profile from DB in background
+            try {
+                authRepository.refreshProfile(session.token).onSuccess { emp ->
+                    val freshPhoto = emp.profilePhotoUrl
+                    if (!freshPhoto.isNullOrBlank()) {
+                        _uiState.update { it.copy(profilePhotoUrl = freshPhoto) }
+                    }
+                }
+            } catch (_: Exception) {
+                // Keep cached photo on error
+            }
 
             // 1. Calculate live Attendance % and Overtime from Monthly Attendance records
             try {
@@ -93,6 +116,8 @@ class ProfileViewModel @Inject constructor(
                             finalAttendance = String.format(Locale.US, "%.1f%%", pct)
                         } else if (summary.presentDays > 0) {
                             finalAttendance = "100.0%"
+                        } else {
+                            finalAttendance = "0.0%"
                         }
 
                         // Overtime = worked minutes exceeding standard 8h (480 mins) per present day
@@ -137,15 +162,17 @@ class ProfileViewModel @Inject constructor(
             }
 
             // Update UI State with computed dynamic values
-            _uiState.value = ProfileUiState(
-                isLoading = false,
-                attendancePercent = finalAttendance,
-                leaveQuota = finalLeaveQuota,
-                overtimeWork = finalOvertime,
-                reportingManager = manager,
-                department = dept,
-                workShift = shift
-            )
+            _uiState.update { current ->
+                current.copy(
+                    isLoading = false,
+                    attendancePercent = finalAttendance,
+                    leaveQuota = finalLeaveQuota,
+                    overtimeWork = finalOvertime,
+                    reportingManager = manager,
+                    department = dept,
+                    workShift = shift
+                )
+            }
 
             // Cache updated dynamic metrics into SessionDataStore
             try {
@@ -161,6 +188,53 @@ class ProfileViewModel @Inject constructor(
                 )
             } catch (_: Exception) {
                 // Ignore cache write error
+            }
+        }
+    }
+
+    fun updateProfilePhoto(
+        session: Session,
+        bitmap: Bitmap,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdatingPhoto = true, photoError = null) }
+            try {
+                // Compress bitmap to 256x256 square JPEG (~15-25 KB) to save space in the DB
+                val compressedBase64 = ImageCompressor.compressBitmapToBase64(bitmap)
+                val result = authRepository.updateProfilePhoto(session.token, compressedBase64)
+                result.onSuccess { savedUrl ->
+                    _uiState.update { it.copy(isUpdatingPhoto = false, profilePhotoUrl = savedUrl) }
+                    onSuccess()
+                }.onFailure { err ->
+                    val msg = err.message ?: "Failed to update profile photo."
+                    _uiState.update { it.copy(isUpdatingPhoto = false, photoError = msg) }
+                    onError(msg)
+                }
+            } catch (e: Exception) {
+                val msg = e.localizedMessage ?: "Failed to compress and save image."
+                _uiState.update { it.copy(isUpdatingPhoto = false, photoError = msg) }
+                onError(msg)
+            }
+        }
+    }
+
+    fun removeProfilePhoto(
+        session: Session,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdatingPhoto = true, photoError = null) }
+            val result = authRepository.updateProfilePhoto(session.token, null)
+            result.onSuccess {
+                _uiState.update { it.copy(isUpdatingPhoto = false, profilePhotoUrl = "") }
+                onSuccess()
+            }.onFailure { err ->
+                val msg = err.message ?: "Failed to remove profile photo."
+                _uiState.update { it.copy(isUpdatingPhoto = false, photoError = msg) }
+                onError(msg)
             }
         }
     }

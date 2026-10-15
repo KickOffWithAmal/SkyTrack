@@ -3,7 +3,12 @@ package com.skypass.skytrack.ui.leave
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -22,6 +27,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -42,8 +48,10 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.EventBusy
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.rounded.MedicalServices
@@ -54,11 +62,15 @@ import androidx.compose.material.icons.rounded.SupervisorAccount
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material.icons.rounded.Timelapse
 import androidx.compose.material.icons.rounded.WbSunny
+import com.skypass.skytrack.ui.components.SkyTrackDialog
+import com.skypass.skytrack.ui.components.SkyTrackDialogType
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -102,6 +114,7 @@ import kotlinx.coroutines.launch
 // Stitch Color Palette
 private val BrandRed = Color(0xFFEF4444)
 private val BrandRedHover = Color(0xFFDC2626)
+private val BrandRedDark = Color(0xFFB91C1C)
 private val BrandLightRed = Color(0xFFFEF2F2)
 private val BrandRedBorder = Color(0xFFFEE2E2)
 private val SurfaceBase = Color(0xFFF8FAFC)
@@ -175,6 +188,7 @@ fun LeaveScreen(
     var reason by remember { mutableStateOf("") }
     var holidayConflictMessage by remember { mutableStateOf<String?>(null) }
     var showPastDateDialog by remember { mutableStateOf(false) }
+    var leaveToCancel by remember { mutableStateOf<LeaveDto?>(null) }
     var resetSliderTrigger by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(session.token) {
@@ -218,15 +232,14 @@ fun LeaveScreen(
     }
 
     if (holidayConflictMessage != null) {
-        AlertDialog(
-            onDismissRequest = { holidayConflictMessage = null },
-            title = { Text("Public Holiday Selected", fontWeight = FontWeight.Bold) },
-            text = { Text(holidayConflictMessage.orEmpty()) },
-            confirmButton = {
-                Button(onClick = { holidayConflictMessage = null }) {
-                    Text("OK")
-                }
-            }
+        SkyTrackDialog(
+            title = "Public Holiday Selected",
+            message = holidayConflictMessage.orEmpty(),
+            icon = Icons.Rounded.EventBusy,
+            type = SkyTrackDialogType.WARNING,
+            confirmText = "OK",
+            onConfirm = { holidayConflictMessage = null },
+            onDismissRequest = { holidayConflictMessage = null }
         )
     }
 
@@ -252,52 +265,73 @@ fun LeaveScreen(
     }
 
     if (showPastDateDialog) {
-        AlertDialog(
-            onDismissRequest = {
+        SkyTrackDialog(
+            title = "Past Date Selected",
+            message = "You are applying for leave on a past date. Do you want to proceed?",
+            icon = Icons.Rounded.History,
+            type = SkyTrackDialogType.WARNING,
+            confirmText = "Submit",
+            dismissText = "Cancel",
+            onConfirm = {
+                showPastDateDialog = false
+                performSubmit()
+            },
+            onDismiss = {
                 showPastDateDialog = false
                 resetSliderTrigger++
             },
-            title = { Text("Past Date Selected", fontWeight = FontWeight.Bold) },
-            text = { Text("You are applying for leave on a past date. Do you want to proceed?") },
-            dismissButton = {
-                Button(onClick = {
-                    showPastDateDialog = false
-                    resetSliderTrigger++
-                }) {
-                    Text("Cancel")
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showPastDateDialog = false
-                    performSubmit()
-                }) {
-                    Text("Submit")
-                }
+            onDismissRequest = {
+                showPastDateDialog = false
+                resetSliderTrigger++
             }
         )
     }
 
     if (state.error != null) {
-        AlertDialog(
-            onDismissRequest = {
+        SkyTrackDialog(
+            title = "SkyTrack",
+            message = state.error.orEmpty(),
+            type = SkyTrackDialogType.ERROR,
+            confirmText = "OK",
+            onConfirm = {
                 viewModel.clearMessages()
                 resetSliderTrigger++
                 viewModel.loadHistory(session)
             },
-            title = { Text("SkyTrack", fontWeight = FontWeight.Bold) },
-            text = { Text(state.error.orEmpty()) },
-            confirmButton = {
-                Button(onClick = {
-                    viewModel.clearMessages()
-                    resetSliderTrigger++
-                    viewModel.loadHistory(session)
-                }) {
-                    Text("OK")
-                }
+            onDismissRequest = {
+                viewModel.clearMessages()
+                resetSliderTrigger++
+                viewModel.loadHistory(session)
             }
         )
     }
+
+    if (leaveToCancel != null) {
+        val target = leaveToCancel!!
+        val dateText = if (!target.from.isNullOrBlank() && !target.to.isNullOrBlank() && target.from != target.to) {
+            "${target.from} to ${target.to}"
+        } else {
+            target.from ?: "the selected date"
+        }
+        SkyTrackDialog(
+            title = "Cancel Leave Request",
+            message = "Are you sure you want to cancel your ${target.type.orEmpty().ifBlank { "leave" }} request for $dateText?",
+            icon = Icons.Rounded.Close,
+            type = SkyTrackDialogType.WARNING,
+            confirmText = "Yes, Cancel",
+            dismissText = "Keep Request",
+            onConfirm = {
+                val toCancel = leaveToCancel
+                leaveToCancel = null
+                if (toCancel != null) {
+                    viewModel.cancelLeave(session, toCancel)
+                }
+            },
+            onDismiss = { leaveToCancel = null },
+            onDismissRequest = { leaveToCancel = null }
+        )
+    }
+
 
     Box(
         modifier = Modifier
@@ -326,7 +360,11 @@ fun LeaveScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Leave Balances Overview (3 Horizontal Cards)
-            LeaveBalancesSection(currentMonth = currentMonth, balance = state.balance)
+            LeaveBalancesSection(
+                currentMonth = currentMonth,
+                balance = state.balance,
+                leaves = state.leaves
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -479,7 +517,12 @@ fun LeaveScreen(
             // Recent Leaves History
             if (state.leaves.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(20.dp))
-                RecentLeaveHistorySection(leaves = state.leaves)
+                RecentLeaveHistorySection(
+                    leaves = state.leaves,
+                    isCancelling = state.isCancelling,
+                    cancellingLeaveId = state.cancellingLeaveId,
+                    onCancelLeave = { leaveToCancel = it }
+                )
             }
         }
 
@@ -493,9 +536,9 @@ fun LeaveScreen(
             onProfileClick = onNavigateProfile
         )
 
-        // SkyTrack Global Loading Dialog
+        // SkyTrack Global Loading Dialog (Initial data loading)
         com.skypass.skytrack.ui.components.SkyTrackLoadingOverlay(
-            visible = state.isLoading || state.isSubmitting
+            visible = state.isLoading
         )
     }
 }
@@ -632,7 +675,11 @@ private fun EmployeeContextSubHeader(
 // LEAVE BALANCES OVERVIEW (3 CARDS)
 // -------------------------------------------------------------
 @Composable
-private fun LeaveBalancesSection(currentMonth: YearMonth, balance: com.skypass.skytrack.data.remote.LeaveBalanceDataDto?) {
+private fun LeaveBalancesSection(
+    currentMonth: YearMonth,
+    balance: com.skypass.skytrack.data.remote.LeaveBalanceDataDto?,
+    leaves: List<LeaveDto> = emptyList()
+) {
     val monthName = remember(currentMonth) {
         currentMonth.format(DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH))
     }
@@ -641,7 +688,7 @@ private fun LeaveBalancesSection(currentMonth: YearMonth, balance: com.skypass.s
     val formatValue = { value: Float? ->
         if (value == null) "0"
         else if (value % 1.0f == 0.0f) value.toInt().toString()
-        else String.format("%.1f", value)
+        else String.format(Locale.US, "%.1f", value)
     }
 
     val casualBalance = formatValue(balance?.casual?.balance)
@@ -649,6 +696,22 @@ private fun LeaveBalancesSection(currentMonth: YearMonth, balance: com.skypass.s
     
     val sickBalance = formatValue(balance?.sick?.balance)
     val sickUsed = formatValue(balance?.sick?.used)
+
+    // Calculate dynamic Loss of Pay (LOP) days taken
+    val lopUsed = remember(leaves, currentMonth) {
+        val monthPrefix = currentMonth.toString() // e.g. "2026-10"
+        leaves
+            .filter {
+                val isLopType = it.type?.contains("Loss of Pay", ignoreCase = true) == true ||
+                        it.type?.contains("lop", ignoreCase = true) == true ||
+                        (it.lopDays != null && it.lopDays > 0f)
+                val isApproved = it.status.equals("approved", ignoreCase = true)
+                val isCurrentMonth = it.from?.startsWith(monthPrefix) == true || it.to?.startsWith(monthPrefix) == true
+                isLopType && isApproved && isCurrentMonth
+            }
+            .sumOf { (it.lopDays ?: it.leaveDays ?: 1f).toDouble() }
+    }
+    val lopDisplay = if (lopUsed % 1.0 == 0.0) lopUsed.toInt().toString() else String.format(Locale.US, "%.1f", lopUsed)
 
     Row(
         modifier = Modifier
@@ -692,7 +755,7 @@ private fun LeaveBalancesSection(currentMonth: YearMonth, balance: com.skypass.s
             title = "LOP",
             icon = Icons.Rounded.EventBusy,
             iconTint = Slate400,
-            count = "00",
+            count = lopDisplay.padStart(2, '0'),
             countColor = Slate900,
             statusLabel = "Taken ($monthName)",
             footerLeft = "Quota",
@@ -1713,11 +1776,37 @@ private fun SwipeToSubmitSlider(
     val maxDragDistance = (trackWidthPx - knobSizePx - 8f).coerceAtLeast(0f)
     var isSubmitted by remember { mutableStateOf(false) }
 
+    val infiniteTransition = rememberInfiniteTransition(label = "slider_loading_pulse")
+    val loadingPulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.12f,
+        targetValue = 0.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "loading_pulse_alpha"
+    )
+
     LaunchedEffect(resetTrigger) {
         if (resetTrigger > 0) {
             isSubmitted = false
             dragOffsetX.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
         }
+    }
+
+    LaunchedEffect(isLoading) {
+        if (isLoading && maxDragDistance > 0f) {
+            dragOffsetX.animateTo(maxDragDistance, animationSpec = tween(200))
+        }
+    }
+
+    val progress = if (maxDragDistance > 0f) dragOffsetX.value / maxDragDistance else 0f
+    val labelAlpha = (1f - progress * 1.5f).coerceIn(0f, 1f)
+
+    val trackBorderColor = when {
+        isSubmitted && !isLoading -> Emerald500.copy(alpha = 0.5f)
+        isLoading -> BrandRed.copy(alpha = 0.4f)
+        else -> Slate200
     }
 
     Box(
@@ -1726,121 +1815,192 @@ private fun SwipeToSubmitSlider(
             .height(56.dp)
             .clip(RoundedCornerShape(28.dp))
             .background(Slate200.copy(alpha = 0.7f))
-            .border(1.dp, Slate200, RoundedCornerShape(28.dp))
+            .border(1.dp, trackBorderColor, RoundedCornerShape(28.dp))
             .onSizeChanged { trackWidthPx = it.width.toFloat() }
             .padding(4.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         // Dynamic expanding fill
+        val fillColor = when {
+            isSubmitted && !isLoading -> Emerald500.copy(alpha = 0.22f)
+            isLoading -> BrandRed.copy(alpha = loadingPulseAlpha)
+            else -> BrandRed.copy(alpha = 0.15f)
+        }
+
+        val fillWidth = if (isLoading && maxDragDistance > 0f) {
+            with(LocalDensity.current) { (maxDragDistance + knobSizePx).toDp() }
+        } else {
+            with(LocalDensity.current) { (dragOffsetX.value + knobSizePx).toDp() }
+        }
+
         Box(
             modifier = Modifier
                 .height(48.dp)
-                .width(
-                    with(LocalDensity.current) {
-                        (dragOffsetX.value + knobSizePx).toDp()
-                    }
-                )
+                .width(fillWidth)
                 .clip(RoundedCornerShape(24.dp))
-                .background(if (isSubmitted) Emerald500.copy(alpha = 0.2f) else BrandRed.copy(alpha = 0.15f))
+                .background(fillColor)
         )
 
-        // Center Label
-        val progress = if (maxDragDistance > 0f) dragOffsetX.value / maxDragDistance else 0f
-        val labelAlpha = (1f - progress * 1.5f).coerceIn(0f, 1f)
-
+        // Center Content Label / Loading State
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            if (isSubmitted) {
-                Text(
-                    text = "Leave Requested",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Emerald600
-                )
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.offset(x = 12.dp)
-                ) {
-                    Text(
-                        text = "Slide to Submit Request",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Slate500.copy(alpha = labelAlpha)
-                    )
-                    Icon(
-                        imageVector = Icons.Rounded.ChevronRight,
-                        contentDescription = null,
-                        tint = Slate400.copy(alpha = labelAlpha),
-                        modifier = Modifier.size(16.dp)
-                    )
+            when {
+                isLoading -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 44.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = BrandRed
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Sending Leave Request...",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandRedDark
+                        )
+                    }
+                }
+                isSubmitted -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.TaskAlt,
+                            contentDescription = null,
+                            tint = Emerald600,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Leave Requested!",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Emerald600
+                        )
+                    }
+                }
+                else -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.offset(x = 12.dp)
+                    ) {
+                        Text(
+                            text = if (progress >= 0.75f) "Release to Submit" else "Slide to Submit Request",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (progress >= 0.75f) BrandRed else Slate500.copy(alpha = labelAlpha)
+                        )
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = if (progress >= 0.75f) BrandRed else Slate400.copy(alpha = labelAlpha),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }
 
         // Draggable Knob
-        val knobBg = if (isSubmitted) Emerald600 else BrandRed
-        val knobIcon = if (isSubmitted) Icons.Rounded.TaskAlt else Icons.Rounded.KeyboardDoubleArrowRight
+        val knobBg = when {
+            isSubmitted && !isLoading -> Emerald600
+            else -> BrandRed
+        }
+
+        val knobTargetX = if (isLoading && maxDragDistance > 0f) maxDragDistance else dragOffsetX.value
 
         Box(
             modifier = Modifier
-                .offset { IntOffset(dragOffsetX.value.roundToInt(), 0) }
+                .offset { IntOffset(knobTargetX.roundToInt(), 0) }
                 .size(knobSizeDp)
                 .shadow(4.dp, CircleShape)
                 .clip(CircleShape)
                 .background(knobBg)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragEnd = {
-                            if (dragOffsetX.value >= maxDragDistance * 0.75f) {
+                .then(
+                    if (!isLoading && !isSubmitted) {
+                        Modifier
+                            .pointerInput(maxDragDistance) {
+                                detectDragGestures(
+                                    onDragEnd = {
+                                        if (dragOffsetX.value >= maxDragDistance * 0.75f) {
+                                            coroutineScope.launch {
+                                                dragOffsetX.animateTo(
+                                                    targetValue = maxDragDistance,
+                                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                                )
+                                                isSubmitted = true
+                                                onSubmit()
+                                            }
+                                        } else {
+                                            coroutineScope.launch {
+                                                dragOffsetX.animateTo(
+                                                    targetValue = 0f,
+                                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        val next = (dragOffsetX.value + dragAmount.x).coerceIn(0f, maxDragDistance)
+                                        coroutineScope.launch {
+                                            dragOffsetX.snapTo(next)
+                                        }
+                                    }
+                                )
+                            }
+                            .clickable {
                                 coroutineScope.launch {
-                                    dragOffsetX.animateTo(
-                                        targetValue = maxDragDistance,
-                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                                    )
+                                    dragOffsetX.animateTo(maxDragDistance)
                                     isSubmitted = true
                                     onSubmit()
                                 }
-                            } else {
-                                coroutineScope.launch {
-                                    dragOffsetX.animateTo(
-                                        targetValue = 0f,
-                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                                    )
-                                }
                             }
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            val next = (dragOffsetX.value + dragAmount.x).coerceIn(0f, maxDragDistance)
-                            coroutineScope.launch {
-                                dragOffsetX.snapTo(next)
-                            }
-                        }
-                    )
-                }
-                .clickable {
-                    // Fallback on tap
-                    coroutineScope.launch {
-                        dragOffsetX.animateTo(maxDragDistance)
-                        isSubmitted = true
-                        onSubmit()
+                    } else {
+                        Modifier
                     }
-                },
+                ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = knobIcon,
-                contentDescription = "Submit",
-                tint = Color.White,
-                modifier = Modifier.size(22.dp)
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.5.dp,
+                    color = Color.White
+                )
+            } else if (isSubmitted) {
+                Icon(
+                    imageVector = Icons.Rounded.TaskAlt,
+                    contentDescription = "Success",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.KeyboardDoubleArrowRight,
+                    contentDescription = "Submit",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         }
     }
 }
+
 
 // -------------------------------------------------------------
 // SUBMISSION SUCCESS CARD
@@ -1890,7 +2050,12 @@ private fun SubmissionSuccessCard(message: String) {
 // RECENT LEAVE HISTORY SECTION
 // -------------------------------------------------------------
 @Composable
-private fun RecentLeaveHistorySection(leaves: List<LeaveDto>) {
+private fun RecentLeaveHistorySection(
+    leaves: List<LeaveDto>,
+    isCancelling: Boolean = false,
+    cancellingLeaveId: String? = null,
+    onCancelLeave: (LeaveDto) -> Unit = {}
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1928,6 +2093,8 @@ private fun RecentLeaveHistorySection(leaves: List<LeaveDto>) {
                 !leave.from.isNullOrBlank() -> leave.from.orEmpty()
                 else -> "Leave"
             }
+            
+            val status = leave.status.orEmpty().lowercase()
             
             // Format float without trailing .0
             val formatDays = { value: Float? ->
@@ -1985,10 +2152,10 @@ private fun RecentLeaveHistorySection(leaves: List<LeaveDto>) {
 //                            }
                         }
 
-                        val status = leave.status.orEmpty().lowercase()
                         val (badgeBg, badgeText) = when {
                             status.contains("approv") -> Emerald50 to Emerald600
                             status.contains("reject") -> BrandLightRed to BrandRed
+                            status.contains("cancel") -> Slate100 to Slate600
                             else -> Amber50 to Amber600
                         }
 
@@ -2015,15 +2182,55 @@ private fun RecentLeaveHistorySection(leaves: List<LeaveDto>) {
                         overflow = TextOverflow.Ellipsis
                     )
                     
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (leave.leaveDays != null) {
-                            Text(text = "Total: ${formatDays(leave.leaveDays)}d", fontSize = 11.sp, color = Slate600, fontWeight = FontWeight.Medium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (leave.leaveDays != null) {
+                                Text(text = "Total: ${formatDays(leave.leaveDays)}d", fontSize = 11.sp, color = Slate600, fontWeight = FontWeight.Medium)
+                            }
+                            if (leave.paidLeaveDays != null) {
+                                Text(text = "Paid: ${formatDays(leave.paidLeaveDays)}d", fontSize = 11.sp, color = Emerald600, fontWeight = FontWeight.Medium)
+                            }
+                            if (leave.lopDays != null && leave.lopDays > 0f) {
+                                Text(text = "LOP: ${formatDays(leave.lopDays)}d", fontSize = 11.sp, color = BrandRed, fontWeight = FontWeight.Medium)
+                            }
                         }
-                        if (leave.paidLeaveDays != null) {
-                            Text(text = "Paid: ${formatDays(leave.paidLeaveDays)}d", fontSize = 11.sp, color = Emerald600, fontWeight = FontWeight.Medium)
-                        }
-                        if (leave.lopDays != null && leave.lopDays > 0f) {
-                            Text(text = "LOP: ${formatDays(leave.lopDays)}d", fontSize = 11.sp, color = BrandRed, fontWeight = FontWeight.Medium)
+
+                        // Cancel Button (ONLY for Pending state)
+                        if (status.contains("pending") || status.isBlank()) {
+                            val isThisCancelling = isCancelling && (cancellingLeaveId == (leave.requestId ?: leave.id))
+                            OutlinedButton(
+                                onClick = { onCancelLeave(leave) },
+                                enabled = !isCancelling,
+                                modifier = Modifier.height(28.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = BrandRed
+                                ),
+                                border = BorderStroke(1.dp, BrandRed.copy(alpha = 0.35f)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                if (isThisCancelling) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(11.dp),
+                                        strokeWidth = 1.5.dp,
+                                        color = BrandRed
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Cancelling...", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "Cancel",
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Cancel", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
                         }
                     }
                     

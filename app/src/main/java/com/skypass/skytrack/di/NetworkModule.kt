@@ -73,4 +73,10 @@ object NetworkModule {
     @Singleton
     fun provideSkyTrackApi(retrofit: Retrofit): SkyTrackApi =
         retrofit.create(SkyTrackApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideConnectivityObserver(
+        networkConnectivityObserver: com.skypass.skytrack.data.local.NetworkConnectivityObserver
+    ): com.skypass.skytrack.data.local.ConnectivityObserver = networkConnectivityObserver
 }

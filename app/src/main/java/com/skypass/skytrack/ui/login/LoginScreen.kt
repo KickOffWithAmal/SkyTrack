@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,8 @@ import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
+import com.skypass.skytrack.ui.components.SkyTrackDialog
+import com.skypass.skytrack.ui.components.SkyTrackDialogType
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -57,6 +60,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -87,23 +91,32 @@ fun LoginScreen(
     onClearError: () -> Unit,
     rememberedAccount: RememberedAccount? = null
 ) {
-    var employeeId by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
+    var employeeId by rememberSaveable(rememberedAccount?.employeeId) {
+        mutableStateOf(if (rememberedAccount?.rememberMe == true) rememberedAccount.employeeId else "")
+    }
+    var password by rememberSaveable(rememberedAccount?.password) {
+        mutableStateOf(if (rememberedAccount?.rememberMe == true) rememberedAccount.password else "")
+    }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
-    var rememberMe by rememberSaveable { mutableStateOf(false) }
+    var rememberMe by rememberSaveable(rememberedAccount?.rememberMe) {
+        mutableStateOf(rememberedAccount?.rememberMe == true)
+    }
     var showForgotPasswordDialog by rememberSaveable { mutableStateOf(false) }
     var hasLoadedRemembered by rememberSaveable { mutableStateOf(false) }
 
     val loading = state is LoginState.Loading
 
     LaunchedEffect(rememberedAccount) {
-        if (!hasLoadedRemembered && rememberedAccount != null) {
-            if (rememberedAccount.rememberMe) {
-                employeeId = rememberedAccount.employeeId
-                password = rememberedAccount.password
+        val account = rememberedAccount ?: return@LaunchedEffect
+        if (!hasLoadedRemembered || (employeeId.isBlank() && password.isBlank())) {
+            if (account.rememberMe && account.employeeId.isNotBlank()) {
+                employeeId = account.employeeId
+                password = account.password
                 rememberMe = true
+                hasLoadedRemembered = true
+            } else if (!account.rememberMe) {
+                hasLoadedRemembered = true
             }
-            hasLoadedRemembered = true
         }
     }
 
@@ -201,7 +214,8 @@ fun LoginScreen(
                             leadingIcon = Icons.Rounded.Badge,
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.Characters,
-                                keyboardType = KeyboardType.Text
+                                keyboardType = KeyboardType.Text,
+                                imeAction = ImeAction.Next
                             ),
                             enabled = !loading
                         )
@@ -233,7 +247,15 @@ fun LoginScreen(
                             },
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.None,
-                                keyboardType = KeyboardType.Password
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    if (!loading && employeeId.isNotBlank() && password.isNotBlank()) {
+                                        onLogin(employeeId, password, rememberMe)
+                                    }
+                                }
                             ),
                             enabled = !loading
                         )
@@ -357,64 +379,26 @@ fun LoginScreen(
 
         // Error Dialog
         if (state is LoginState.Error) {
-            AlertDialog(
-                onDismissRequest = onClearError,
-                title = {
-                    Text(
-                        text = "SkyTrack",
-                        fontWeight = FontWeight.Bold,
-                        color = Slate900
-                    )
-                },
-                text = {
-                    Text(
-                        text = state.message,
-                        color = Slate800,
-                        fontSize = 15.sp
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = onClearError,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("OK", color = Color.White, fontWeight = FontWeight.SemiBold)
-                    }
-                },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = Color.White
+            SkyTrackDialog(
+                title = "Authentication Error",
+                message = state.message,
+                type = SkyTrackDialogType.ERROR,
+                confirmText = "OK",
+                onConfirm = onClearError,
+                onDismissRequest = onClearError
             )
         }
 
         // Forgot Password Dialog
         if (showForgotPasswordDialog) {
-            AlertDialog(
-                onDismissRequest = { showForgotPasswordDialog = false },
-                title = {
-                    Text(
-                        text = "Reset Password",
-                        fontWeight = FontWeight.Bold,
-                        color = Slate900
-                    )
-                },
-                text = {
-                    Text(
-                        text = "For security reasons, please contact your SkyTrack administrator or HR department to reset your credentials.",
-                        color = Slate700,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = { showForgotPasswordDialog = false }
-                    ) {
-                        Text("Close", color = BrandRed, fontWeight = FontWeight.Bold)
-                    }
-                },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = Color.White
+            SkyTrackDialog(
+                title = "Reset Password",
+                message = "For security reasons, please contact your SkyTrack administrator or HR department to reset your credentials.",
+                icon = Icons.Rounded.Lock,
+                type = SkyTrackDialogType.INFO,
+                confirmText = "Understood",
+                onConfirm = { showForgotPasswordDialog = false },
+                onDismissRequest = { showForgotPasswordDialog = false }
             )
         }
     }
@@ -431,6 +415,7 @@ private fun EnterpriseInputField(
     isPassword: Boolean = false,
     passwordVisible: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
     enabled: Boolean = true
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -508,6 +493,7 @@ private fun EnterpriseInputField(
                             VisualTransformation.None
                         },
                         keyboardOptions = keyboardOptions,
+                        keyboardActions = keyboardActions,
                         cursorBrush = SolidColor(BrandRed),
                         enabled = enabled
                     )

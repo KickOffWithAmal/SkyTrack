@@ -24,6 +24,8 @@ data class LeaveUiState(
     val holidays: List<PublicHoliday> = emptyList(),
     val isLoading: Boolean = true,
     val isSubmitting: Boolean = false,
+    val isCancelling: Boolean = false,
+    val cancellingLeaveId: String? = null,
     val successMessage: String? = null,
     val error: String? = null,
     val signedOut: Boolean = false
@@ -120,6 +122,39 @@ class LeaveViewModel @Inject constructor(
                 )
                 loadHistory(session)
             }.onFailure {
+                handleFailure(it, keepLeaves = true)
+            }
+        }
+    }
+
+    fun cancelLeave(
+        session: Session,
+        leave: LeaveDto
+    ) {
+        val reqId = leave.requestId ?: leave.id ?: return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                isCancelling = true,
+                cancellingLeaveId = reqId,
+                error = null,
+                successMessage = null
+            )
+
+            repository.cancel(
+                token = session.token,
+                requestId = reqId
+            ).onSuccess {
+                _state.value = _state.value.copy(
+                    isCancelling = false,
+                    cancellingLeaveId = null,
+                    successMessage = "Leave request cancelled."
+                )
+                loadHistory(session)
+            }.onFailure {
+                _state.value = _state.value.copy(
+                    isCancelling = false,
+                    cancellingLeaveId = null
+                )
                 handleFailure(it, keepLeaves = true)
             }
         }

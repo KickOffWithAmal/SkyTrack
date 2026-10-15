@@ -28,11 +28,11 @@ class LoginViewModel @Inject constructor(
     private val _state = MutableStateFlow<LoginState>(LoginState.Idle)
     val state: StateFlow<LoginState> = _state.asStateFlow()
 
-    val rememberedAccount: StateFlow<RememberedAccount> = repository.rememberedAccount
+    val rememberedAccount: StateFlow<RememberedAccount?> = repository.rememberedAccount
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
-            initialValue = RememberedAccount()
+            initialValue = null
         )
 
     fun login(employeeId: String, password: String, rememberMe: Boolean = false) {

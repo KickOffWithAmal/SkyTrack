@@ -30,7 +30,13 @@ data class EmployeeDto(
     val workShiftName: String? = null,
     val attendancePercent: String? = null,
     val leaveQuota: String? = null,
-    val ytdOvertime: String? = null
+    val ytdOvertime: String? = null,
+    @com.google.gson.annotations.SerializedName("createdAt", alternate = ["created_at"])
+    val createdAt: String? = null,
+    @com.google.gson.annotations.SerializedName("joiningDate", alternate = ["joining_date"])
+    val joiningDate: String? = null,
+    @com.google.gson.annotations.SerializedName("profilePhotoUrl", alternate = ["profile_photo_url", "avatar"])
+    val profilePhotoUrl: String? = null
 )
 
 data class AttendanceRequest(
@@ -103,6 +109,18 @@ data class LeaveHistoryRequest(
     val action: String = "leave_history"
 )
 
+data class CancelLeaveRequest(
+    val action: String = "cancel_leave",
+    @SerializedName("requestId", alternate = ["request_id", "id"]) val requestId: String
+)
+
+data class CancelLeaveResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val error: String? = null,
+    val leave: LeaveDto? = null
+)
+
 data class LeaveBalanceItemDto(
     val allocated: Float? = null,
     val adjusted: Float? = null,
@@ -134,11 +152,20 @@ data class MonthlyAttendanceResponse(
     val error: String? = null,
     val summary: MonthlyAttendanceSummary? = null,
     val attendance: List<MonthlyAttendanceDto>? = null,
-    val data: MonthlyAttendanceDataDto? = null
+    val data: MonthlyAttendanceDataDto? = null,
+    val employee: MonthlyEmployeeDto? = null
 ) {
     val actualSummary: MonthlyAttendanceSummary? get() = data?.summary ?: summary
     val actualAttendance: List<MonthlyAttendanceDto> get() = data?.attendance ?: attendance ?: emptyList()
 }
+
+data class MonthlyEmployeeDto(
+    val id: String? = null,
+    @SerializedName("employeeId", alternate = ["employee_id"]) val employeeId: String? = null,
+    val name: String? = null,
+    @SerializedName("createdAt", alternate = ["created_at"]) val createdAt: String? = null,
+    @SerializedName("joiningDate", alternate = ["joining_date"]) val joiningDate: String? = null
+)
 
 data class MonthlyAttendanceDataDto(
     val summary: MonthlyAttendanceSummary? = null,
@@ -147,14 +174,17 @@ data class MonthlyAttendanceDataDto(
 
 data class MonthlyAttendanceSummary(
     val month: String,
-    @SerializedName("workingDays", alternate = ["working_days"]) val workingDays: Int,
+    @SerializedName("workingDays", alternate = ["working_days", "required_working_days"]) val workingDays: Int,
     @SerializedName("presentDays", alternate = ["present_days"]) val presentDays: Int,
     @SerializedName("absentDays", alternate = ["absent_days"]) val absentDays: Int,
     @SerializedName("incompleteDays", alternate = ["incomplete_days"]) val incompleteDays: Int,
+    @SerializedName("leaveDays", alternate = ["leave_days", "approved_leave_days"]) val leaveDays: Int? = null,
     @SerializedName("totalHours", alternate = ["total_hours", "total_active_formatted"]) val totalHours: String,
     @SerializedName("averageHours", alternate = ["average_hours", "average_active_formatted"]) val averageHours: String,
     @SerializedName("targetHoursFormatted", alternate = ["target_hours_formatted", "required_hours_formatted"]) val targetHoursFormatted: String? = null,
     @SerializedName("totalBreakFormatted", alternate = ["total_break_formatted"]) val totalBreakFormatted: String? = null,
+    @SerializedName("overtimeFormatted", alternate = ["overtime_formatted"]) val overtimeFormatted: String? = null,
+    @SerializedName("differenceFormatted", alternate = ["difference_formatted"]) val differenceFormatted: String? = null,
     @SerializedName("presentPercent", alternate = ["present_percent"]) val presentPercent: Int? = null,
     val totalWorkedMinutes: Int? = null,
     val totalBreakMinutes: Int? = null
@@ -164,9 +194,11 @@ data class MonthlyAttendanceDto(
     val date: String,
     @SerializedName("employeeId", alternate = ["employee_id"]) val employeeId: String? = null,
     val name: String? = null,
-    @SerializedName("login", alternate = ["check_in"]) val login: String? = null,
-    @SerializedName("logout", alternate = ["check_out"]) val logout: String? = null,
-    @SerializedName("hours", alternate = ["active_formatted"]) val hours: String? = null,
+    @SerializedName("login") val login: String? = null,
+    @SerializedName("logout") val logout: String? = null,
+    @SerializedName("check_in") val rawCheckIn: String? = null,
+    @SerializedName("check_out") val rawCheckOut: String? = null,
+    @SerializedName("hours", alternate = ["active_formatted", "worked_hours"]) val hours: String? = null,
     @SerializedName("breakFormatted", alternate = ["break_formatted"]) val breakFormatted: String? = null,
     val status: String,
     val workedMinutes: Int? = null,
@@ -191,6 +223,26 @@ data class PublicHoliday(
     val date: java.time.LocalDate,
     val name: String,
     val category: String = "Public Holiday"
+)
+
+data class UpdateProfilePhotoRequest(
+    val action: String = "update_profile_photo",
+    val photo: String? = null
+)
+
+data class UpdateProfilePhotoResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val error: String? = null,
+    @SerializedName("profilePhotoUrl", alternate = ["profile_photo_url"])
+    val profilePhotoUrl: String? = null
+)
+
+data class ProfileResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val error: String? = null,
+    val employee: EmployeeDto? = null
 )
 
 
