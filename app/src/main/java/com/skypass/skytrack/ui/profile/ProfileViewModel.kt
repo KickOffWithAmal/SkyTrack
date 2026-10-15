@@ -38,11 +38,27 @@ class ProfileViewModel @Inject constructor(
     private val monthlyRepository: MonthlyStatisticsRepository,
     private val leaveRepository: LeaveRepository,
     private val sessionDataStore: SessionDataStore,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    val appUpdateManager: com.skypass.skytrack.data.update.AppUpdateManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    fun checkForUpdatesManual(onResult: (isUpdateAvailable: Boolean, message: String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val update = appUpdateManager.checkForUpdates(isManualCheck = true)
+                if (update != null) {
+                    onResult(true, "Update found: v${update.versionName}")
+                } else {
+                    onResult(false, "SkyTrack is up to date (v${com.skypass.skytrack.BuildConfig.VERSION_NAME}).")
+                }
+            } catch (e: Exception) {
+                onResult(false, "Unable to check for updates right now.")
+            }
+        }
+    }
 
     fun loadProfileData(session: Session) {
         val currentMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"))

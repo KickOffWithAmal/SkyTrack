@@ -52,6 +52,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var offlineSyncManager: OfflineSyncManager
 
+    @Inject
+    lateinit var appUpdateManager: com.skypass.skytrack.data.update.AppUpdateManager
+
     private val loginViewModel: LoginViewModel by viewModels()
     private val homeViewModel: HomeViewModel by viewModels()
     private val leaveViewModel: LeaveViewModel by viewModels()
@@ -102,9 +105,19 @@ class MainActivity : ComponentActivity() {
                         mutableStateOf(false)
                     }
 
+                    val updateInfo by appUpdateManager.updateInfo.collectAsState()
+                    val context = androidx.compose.ui.platform.LocalContext.current
+
                     LaunchedEffect(Unit) {
                         authRepository.session.first()
                         isSessionLoaded = true
+                    }
+
+                    // Check for updates asynchronously once the splash finishes
+                    LaunchedEffect(splashAnimationFinished) {
+                        if (splashAnimationFinished) {
+                            appUpdateManager.checkForUpdates()
+                        }
                     }
 
                     val showSplash = !splashAnimationFinished || !isSessionLoaded
@@ -260,6 +273,33 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .align(Alignment.TopCenter)
                                     .statusBarsPadding()
+                            )
+                        }
+
+                        // In-app Update Dialog (prompted once per session, dismissed via "Later" without interrupting app)
+                        if (updateInfo != null && !showSplash) {
+                            com.skypass.skytrack.ui.components.AppUpdateDialog(
+                                updateInfo = updateInfo!!,
+                                onUpdateClick = { releaseUrl ->
+                                    try {
+                                        val intent = android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(releaseUrl)
+                                        ).apply {
+                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Unable to open browser. Please visit: $releaseUrl",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                },
+                                onDismiss = {
+                                    appUpdateManager.dismissUpdate()
+                                }
                             )
                         }
                     }

@@ -314,7 +314,14 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Primary Action: Sign Out & Version Footer
-            SignOutSection(onLogout = onLogout)
+            SignOutSection(
+                onLogout = onLogout,
+                onCheckForUpdates = {
+                    viewModel.checkForUpdatesManual { _, msg ->
+                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
         }
 
         // Floating Bottom Navigation Dock (Active on PROFILE)
@@ -1257,7 +1264,10 @@ private fun CustomPillToggle(
 // SIGN OUT BUTTON & VERSION FOOTER
 // -------------------------------------------------------------
 @Composable
-private fun SignOutSection(onLogout: () -> Unit) {
+private fun SignOutSection(
+    onLogout: () -> Unit,
+    onCheckForUpdates: () -> Unit = {}
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1305,12 +1315,21 @@ private fun SignOutSection(onLogout: () -> Unit) {
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        Text(
-            text = "SkyTrack Mobile v1.0.0 • Skypass Visa Services",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            color = Slate400,
-            textAlign = TextAlign.Center
-        )
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onCheckForUpdates)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "SkyTrack Mobile v${com.skypass.skytrack.BuildConfig.VERSION_NAME} • Check for updates",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = Slate400,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }

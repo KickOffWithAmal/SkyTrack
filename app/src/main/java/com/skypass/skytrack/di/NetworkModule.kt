@@ -79,4 +79,39 @@ object NetworkModule {
     fun provideConnectivityObserver(
         networkConnectivityObserver: com.skypass.skytrack.data.local.NetworkConnectivityObserver
     ): com.skypass.skytrack.data.local.ConnectivityObserver = networkConnectivityObserver
+
+    @Provides
+    @Singleton
+    @javax.inject.Named("githubClient")
+    fun provideGithubOkHttpClient(): OkHttpClient {
+        val logging = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+        }
+        return OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("User-Agent", "SkyTrack-Android-App")
+                    .header("Accept", "application/vnd.github+json")
+                    .build()
+                chain.proceed(request)
+            }
+            .addInterceptor(logging)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideGithubReleaseApi(
+        @javax.inject.Named("githubClient") client: OkHttpClient
+    ): com.skypass.skytrack.data.remote.GithubReleaseApi =
+        Retrofit.Builder()
+            .baseUrl("https://api.github.com/")
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(com.skypass.skytrack.data.remote.GithubReleaseApi::class.java)
 }
